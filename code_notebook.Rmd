@@ -1,0 +1,1294 @@
+---
+title: "code_notebook"
+author: "Emily Dombrowski"
+date: "2026-05-01"
+output: html_document
+---
+
+This is a code notebook for my Australian mussel sequence data. I will use it to record the information I do for creating file structures, repositories, etc. My goal is to document errors that I run into, steps I have to take, and justification of parameter deccisions in a central place. I also use this quite a bit to copy my code and error messages...it is definitely a very "beginner level" genomic coding document, so I do include many steps that are glaringly obvious and tend to write in a journal style (for better or worse).
+
+# Table of Contents:   
+* [Entry 1: 2026-05-01](#id-section1)
+* [Entry 2: 2026-05-04](#id-section2)
+* [Entry 3: 2026-05-05](#id-section3)
+* [Entry 4: 2026-05-06](#id-section4)
+* [Entry 5: 2026-05-07](#id-section5)
+* [Entry 6: 2026-05-08](#id-section6)
+* [Entry 7: 2026-05-11](#id-section7)
+* [Entry 8: 2026-05-12](#id-section8)
+* [Entry 9: 2026-05-13](#id-section9)
+* [Entry 10: 2026-05-14](#id-section10)
+* [Entry 11: 2026-05-17](#id-section11)
+* [Entry 12: 2026-05-26](#id-section12)
+* [Entry 13: 2026-06-01](#id-section13)
+* [Entry 14: 2026-06-02](#id-section14)
+* [Entry 15: 2026-06-03](#id-section15)
+* [Entry 16: 2026-06-04](#id-section16)
+* [Entry 17: 2026-06-05](#id-section17)
+* [Entry 18: 2026-06-08](#id-section18)
+* [Entry 19: 2026-06-09](#id-section19)
+* [Entry 20: 2026-06-11](#id-section20)
+* [Entry 21: 2026-06-12](#id-section21)
+* [Entry 22: 2026-06-13](#id-section22)
+* [Entry 23: 2026-06-15](#id-section23)
+* [Entry 24: 2026-06-16](#id-section24)
+* [Entry 25: 2026-06-17](#id-section25)
+
+------    
+<div id='id-section1'/> 
+
+### Entry 1: 2026-05-01
+
+Coding session: getting on the Lockwood Lab VACC and starting to compile commands for downloading my sequence data
+
+Relevant file paths: 
+/netfiles/lockwood_lab/aus_mussels
+
+aus_mussels/
+  data/
+    raw
+    reference
+
+Steps: 
+1. Log into VACC on my computer (using ssh)
+2. cd into aus_mussels/data/raw
+3. Set up tmux: `tmux new -s agrf_transfer`
+4. Request wall time to run job over the weekend `srun --pty --mem=8G --time=24:00:00 /bin/bash`
+5. Run command from AGRF to download data: `rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4 ./ && rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4 ./`
+6. Detach from tmux: Ctrl + b, then d
+7. Exit VACC and come back to check in
+
+NOTE: 2026-05-02
+* Requesting 76 hours of wall time did not get approved. I resubmitted and asked for 24 hours. This immediately went through and the transfer has started. 
+
+To do next: 
+* CHECK if the files populated into the correct folders
+* Create readme for the files
+* Set up VPN to look at files at home
+
+------ 
+
+------    
+<div id='id-section2'/> 
+
+### Entry 2: 2026-05-04
+
+After checking back into my repo, no files were loaded. I started the srun command and monitored it. Shortly after starting, it gave me the following error message: 
+
+`VACC Error: `ssh: connect to host agrf-data.agrf.org.au port 22: Connection timed out
+
+
+
+You can find some explanations for typical errors at this link:
+
+            https://red.ht/support_rhel_ssh
+
+rsync: connection unexpectedly closed (0 bytes received so far) [Receiver]
+
+rsync error: error in rsync protocol data stream (code 12) at io.c(228) [Receiver=3.2.5]`
+
+I chatted with the VACC support team and they explained to me that the data is hitting a firewall: essentially, "the command is dying in Australia." The server on their end is not letting my request through. To overcome this, I need to reach out to AGRF  and add my IP address to their access list. Likely when I reach out, IT will need to be involved. The connection is timing out. The VACC sent different IP addresses to share with AGRF that can be added to an access list: 
+
+mgmt-out.vacc.uvm.edu. (132.198.57.16)
+login1.vacc.uvm.edu (132.198.57.101)
+login2.vacc.uvm.edu (132.198.57.102)
+login3.vacc.uvm.edu (132.198.57.103)
+login4.vacc.uvm.edu (132.198.57.104)
+
+------ 
+
+------    
+<div id='id-section3'/> 
+
+### Entry 3: 2026-05-05
+AGRF responded to communications from me about updating access to their server. Sam also mentioned that she creates a job with allocated wall time to do this sort of transfer, so I will keep that in my workflow (though the folks at the VACC mentioned it may not be necessary...I think given the amount of data, it is.)
+Today, I will create another job and re-run the steps to download. 
+
+I ran the following command in my job: 
+`rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/ && rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/`
+
+...and it actually connected! I was prompted to enter my AGRF password, then a new folder populated in my aus_mussels/data/raw folder. I now wonder if I will have to move the files out, but that is okay. It worked!! 
+
+Next, I need to 
+* wait for job to complete
+* respond to emails from Sam and AGRF
+* look up how to move files
+* get the pipeline ready for the next step
+
+------
+
+------    
+<div id='id-section4'/> 
+
+### Entry 4: 2026-05-06
+2026-05-06
+Okay, so the 24 hours of wall time wasn't enough. I am going to start a new tmux session and go from there. 
+
+1. tmux new -s genomics_download
+2. `srun --time=48:00:00 --mem=4G --pty bash`
+3. `rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/ ; rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/`
+4. Type in password when prompted
+5. Download has started. Detach from tmux (control b + d)
+6. To reattach tomorrow: `tmux attach -t genomics_download'
+
+------
+
+------    
+<div id='id-section5'/> 
+
+### Entry 5: 2026-05-07
+
+Okay, so I made some headway on my tmux dilemna. I logged into the vacc and did "tmux attach..." and was brought to an old tmux session I thought had crased over the weekend. Hm...but, upon ivestigation (and some insight from gemini ai), I have discovered that my session I started yesterday is still running, but each time I login to the VACC, I am shuttled in through a different login node. The good news is that my code is still working in the background, I verified that there are more files in my folder and the rsync command is running when I look at `top -u {my user name}`. 
+
+So, lesson learned: tmux is a bit finnicky when on the VACC, but running a "job" ensures the continuity of the process in the background. 
+
+------
+
+------    
+<div id='id-section6'/> 
+
+### Entry 6: 2026-05-08
+...so. The data is still transferring after 72 hours!!!! We love to see it. I still ran the necessary checks for storage space, and I re-initiated a new 48 hour job with the same rsync commands. The files are moving! Just...pretty slowly. Here's today's code
+
+1. New tmux session `agrf_transfer` (login node 4 for reattachment)
+2. `srun --time=48:00:00 --mem=4G --pty bash`
+3. `rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/ ; rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/`
+...my files are loading, password prompted, etc. Hopefully this will be the last push?????????????? Sigh sigh sigh. Signing off for the weekend. 
+
+
+------ 
+
+------    
+<div id='id-section7'/> 
+
+### Entry 7: 2026-05-11
+
+LOL I need to stop saying "It will finally finish..." When will I learn. Another go, I logged back into login node 4 and my job has not finished. Lets go again. 
+
+Again! 
+1. New tmux session `agrf_transfer` (login node 4 for reattachment)
+2. `srun --time=48:00:00 --mem=4G --pty bash`
+3. `rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/ ; rsync -avhP -e ssh EmilyDombrowski@agrf-data.agrf.org.au:files/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4 /netfiles/lockwood_lab/aus_mussels/data/raw/`
+...Is it my fault it has been taking so long?? This seems crazy. 
+
+Tomorrow, I will plan to make my fastp script and array. That way, if I still need more time for the data, then I will be ready for the next step at least. 
+
+------ 
+
+------    
+<div id='id-section7'/> 
+
+### Entry 8: 2026-05-12
+
+I woke up early today and checked in on the file download. It is going smoothly. It seems like the fiels are taking about 11 minutes to download each...
+
+I have some notes about fastp and fastqc scripting. 
+
+1. This should be ran as an array given the amount of data. Additionally, each sample was mapped over multiple lanes. This means, instead of the files being the traditional `*_R1.gz` and `*_R2.gz` format, they are `*L001_R1.gz` all the way through `*L008_R1.gz`...this means that I will need a sample file with all of the names. I already need to create a metadata file with this information, so
+
+------ 
+
+------    
+<div id='id-section9'/> 
+
+### Entry 9: 2026-05-13
+
+I didn't make this note when I did it, but I did another 48 hour job that did not complete. It did make a new folder, which is good news. Unfortunately, I did take a hiatus when leaving the country, leading to notes for Tripp and his guest entry.
+
+------
+
+------    
+<div id='id-section10'/> 
+
+### Entry 10: 2026-05-14
+
+Notes for Tripp: 
+
+1. Configure VPN: login with netid and password: 
+(let me know for duo authentification)
+2. Open terminal on my computer
+3. Log into vacc
+4. cd /netfiles/lockwood_lab/aus_mussels/data/raw/
+5. ll
+...then if files do not look how I expect, ask me from there. 
+
+------
+
+------
+<div id='id-section11'/> 
+
+### Entry 11: 2026-05-17
+
+Guest Entry (Tripp):
+
+Today I checked on progress and reran rsync in Emily's stead. She says everything looks okay, but will request the data be stored on AUS servers for another week. Ran rsync command for 24 hours in raw folder. 
+
+------
+
+------
+<div id='id-section12'/> 
+
+### Entry 12: 2026-05-26
+
+Checked back in on tmux; files have finished uploading. I got the following code output: 
+`receiving incremental file list
+AGRF_NXGSQCAGRF25090171-2_23JW2NLT4/
+
+sent 28 bytes  received 1.56K bytes  42.35 bytes/sec
+total size is 217.28G  speedup is 136,824,902.68`
+
+So, for my next steps I need to do the following: 
+* make a file with all the sample names to input into the array
+* test the array on a subset of samples to make sure that it outputs what I expect
+* run the fastq array
+* next, trim the files based on how the visualization looks; decide if any files look strange, etc. QC. 
+
+------
+
+------
+<div id='id-section13'/> 
+
+### Entry 13: 2026-06-01
+Today, I am going to deploy some scripts for fastp and fastq. Here is the code I used to make my parameter file: 
+First, I cd'd to the trimmed folder. I pasted this code: 
+```
+# Clear out any old tracking files
+> raw_list.txt
+
+# Define the source path variable
+RAW_DIR="/netfiles/lockwood_lab/aus_mussels/data/raw"
+
+# Scan both subfolders for Forward reads (R1)
+for f in ${RAW_DIR}/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4/*_R1.fastq.gz ${RAW_DIR}/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4/*_R1.fastq.gz; do
+    if [ -f "$f" ]; then
+        basename "$f" | cut -d'_' -f1 >> raw_list.txt
+    fi
+done
+
+# Deduplicate and save the clean list of 70 samples
+sort -u raw_list.txt > unique_samples.txt
+rm raw_list.txt
+
+# Display your finalized list with line numbers to verify
+cat -n unique_samples.txt
+```
+The code output a list with 70 files. Success! For now, seeing all the files just with their sequences, I do realize what a mess I made of naming them...thankfully, now that there is a list, I can go ahead and make a metadata with better names. Which is frustrating, but it is alright. 
+
+Next, I am making the following script into my trimmed directory: trim_array.sh
+```
+#!/bin/bash
+#SBATCH --job-name=fastp_trim
+#SBATCH --output=trim_%A_%a.out
+#SBATCH --error=trim_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --array=1-70
+
+# Load the required compiler first, then load fastp
+module load gcc/13.3.0-xp3epyt
+module load fastp/0.23.4-mjw7rak
+
+# Define raw data subfolders
+DIR1="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4"
+DIR2="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4"
+
+# Because you are running from inside 'trimmed', save outputs directly here
+OUT_DIR="."
+
+# Extract the specific sample ID for this Slurm task
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" unique_samples.txt)
+
+echo "Processing task ID ${SLURM_ARRAY_TASK_ID}: Sample ${SAMPLE}"
+
+# Determine which folder this specific sample lives in
+if ls ${DIR1}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR1
+elif ls ${DIR2}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR2
+else
+    echo "ERROR: Sample ${SAMPLE} not found in either folder!"
+    exit 1
+fi
+
+echo "Merging 8 lanes for ${SAMPLE}..."
+cat ${DATA_DIR}/${SAMPLE}_*L00*_R1.fastq.gz > ${SAMPLE}_merged_R1.fastq.gz
+cat ${DATA_DIR}/${SAMPLE}_*L00*_R2.fastq.gz > ${SAMPLE}_merged_R2.fastq.gz
+
+echo "Running fastp on ${SAMPLE}..."
+fastp \
+  --thread 4 \
+  --in1 ${SAMPLE}_merged_R1.fastq.gz \
+  --in2 ${SAMPLE}_merged_R2.fastq.gz \
+  --out1 ${OUT_DIR}/${SAMPLE}_trimmed_R1.fastq.gz \
+  --out2 ${OUT_DIR}/${SAMPLE}_trimmed_R2.fastq.gz \
+  --html ${OUT_DIR}/${SAMPLE}_fastp.html \
+  --json ${OUT_DIR}/${SAMPLE}_fastp.json \
+  --qualified_quality_phred 20 \
+  --length_required 30 \
+  --detect_adapter_for_pe
+
+echo "Cleaning up temporary merged files..."
+rm ${SAMPLE}_merged_R1.fastq.gz ${SAMPLE}_merged_R2.fastq.gz
+
+echo "Finished processing ${SAMPLE} safely."
+```
+I typed in `nano trim_array.sh` and entered this. Then, saved (control + o) and exited (control + x) and deployed a test run on the first sample: `sbatch --array=1-1 --time=00:30:00 trim_array.sh`
+
+After running that, I got an error relating to how I loaded the fastp module...to do this better, I typed in:
+`module spider fastp`, which gave me information about the exact version of fastp. I went in and changed two lines:
+`# Load the required compiler first, then load fastp
+module load gcc/13.3.0-xp3epyt
+module load fastp/0.23.4-mjw7rak`
+
+Next, I checked that it saved with `cat -n trim_array.sh` -- it worked!
+
+Now, I will deploy the array again for a trial (AFTER I delete the two files it did output.)
+
+When the sbatch job is running, I can exit the terminal and check in on progress with squeue. I will check back in a few minutes if the files worked, and go from there. 
+
+...got another error. re-running. Seeing if it will resolve. After some trouble shooting, it seems like the nature of the error is arrising from the samples being ran accross 8 lanes. One of the lanes will be read, but it will fail to pass off. I think once I get past this step it will not be an issue, and hopefully the next files will not have these same formatting issues. 
+
+FINAL update: 
+The issue with this was that the files were not merged; the final version of the script (updated above) includes a portion that merges the files before they are analyzed. Because there are only 1.8 TB remaining of Lockwood lab space, I needed to run a command that would only allow a portion of the array to run at a time. Here is the command: `sbatch --array=1-70%5 trim_array.sh`. The %5 limits the amount of functions that are ran...even though the array has a 4 hour time allocation, it will allow everything to run without blowing out the space...or so I hope.
+
+To do when I am done:
+* Read me file with file structure and project goals to update
+* Meta data file with cleaner names
+* "Lock" raw folder so that nothing can be changed/over written; look up external hard drive to buy/ask Longman
+
+------
+
+------
+<div id='id-section14'/> 
+
+### Entry 14: 2026-06-02
+
+Okay! Soo...my script worked up until the 37th file; then, I blew out the Lockwood Lab netfiles space. Time to move! I will be moving my data over to the scratch space. Here is the file path to scratch: 
+
+`/gpfs2/scratch/edombro1`
+
+Let's make some new folders and directories, then copy stuff over. There is plenty of space in scratch, but this folder is not backed up regularly. So something to keep in mind. Here's my scratch directory structure (for now):
+
+edombro1
+  - aus_mussels
+    - data
+      - trimmed
+
+I will need to move the contents of my fastp run into the trimmed folder, and also produce the rest of my files that stopped running. From there, I also want to produce fastq .html files to look at quality of each of my samples. 
+
+I oppened a tmux screen and ran the following to move...
+```
+rsync -avh --remove-source-files --progress /netfiles/lockwood_lab/aus_mussels/data/trimmed/* /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/
+```
+
+Next, I need to go in and update my array script to complete the move for the rest of the files. 
+I will change the output directory to my new `gpfs2/scratch/edombro1/aus_mussels/data/trimmed` folder, then re-launch the array.
+
+According to Emily Longman, the next stage in which I should save things should be when the files get to be "bams." Fastq and fastp are perfect on scratch!
+
+------
+
+------
+<div id='id-section15'/> 
+
+### Entry 15: 2026-06-03
+
+This morning, the rsync command I executed yesterday had finished. I came in and my files had successfully moved into my scratch folder. I changed my `trim_array.sh` script's output line to output my files into the gpfs2 folder...while the script was set up to output into the current directory `.`, I hard-coded this line just in case. 
+
+I re-ran the array with the following command: 
+`sbatch --array=32-70%5 trim_array.sh`
+The files should continue populating. Additionally, this run is already producing .html files, so I do not need to do fastq as well. Great!
+
+------
+
+------
+<div id='id-section16'/> 
+
+### Entry 16: 2026-06-04
+
+Today's coding session was largely based on what I have learned from my ecological genomics class: https://pespenilab.github.io/Ecological-Genomics/Fall2025/tutorials/EcoGen2025_PopGenomics3_mapping.html
+
+I came back this morning to check on my fastp array...I still have error files for samples 32-70. Most of the males processed, all of the females processed...I. wonder what these additioinal files are. Looking at the outputs of one of the error files, there was 96% reads that have a quality score above 30. I will take it. 
+
+Now that I look at it, it looks like...the files that all output errors are the ones that I ran yesterday. So. That is not awe inspiring. But the output in the error file does not seem like an issue? I will copy and paste the output here: 
+
+```
+cat trim_4364127_32.err 
+Detecting adapter sequence for read1...
+>I7_Nextera_Transposase_1 | >Trans2_rc | >I7_Nextera_Transposase_1 | >Trans2_rc
+CTGTCTCTTATACACATCTCCGAGCCCACGAGAC
+
+Detecting adapter sequence for read2...
+>I5_Nextera_Transposase_1 | >Trans1_rc | >I5_Nextera_Transposase_1 | >Trans1_rc
+CTGTCTCTTATACACATCTGACGCTGCCGACGA
+
+Read1 before filtering:
+total reads: 524409870
+total bases: 78661480500
+Q20 bases: 77545653450(98.5815%)
+Q30 bases: 75123324029(95.502%)
+
+Read2 before filtering:
+total reads: 524409870
+total bases: 78661480500
+Q20 bases: 77803880350(98.9098%)
+Q30 bases: 75570842323(96.071%)
+
+Read1 after filtering:
+total reads: 520447482
+total bases: 73782806364
+Q20 bases: 73381447574(99.456%)
+Q30 bases: 71721875605(97.2068%)
+
+Read2 after filtering:
+total reads: 520447482
+total bases: 73786963534
+Q20 bases: 73253456387(99.277%)
+Q30 bases: 71345017047(96.6905%)
+
+Filtering result:
+reads passed filter: 1040894964
+reads failed due to low quality: 6851510
+reads failed due to too many N: 89336
+reads failed due to too short: 983930
+reads with adapter trimmed: 169005421
+bases trimmed due to adapters: 8703128448
+
+Duplication rate: 20.932%
+
+Insert size peak (evaluated by paired-end reads): 261
+
+JSON report: /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_fastp.json
+HTML report: /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_fastp.html
+
+fastp --thread 4 --in1 C1R1-14C-D20-E1_merged_R1.fastq.gz --in2 C1R1-14C-D20-E1_merged_R2.fastq.gz --out1 /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_trimmed_R1.fastq.gz --out2 /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_trimmed_R2.fastq.gz --html /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_fastp.html --json /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_fastp.json --qualified_quality_phred 20 --length_required 30 --detect_adapter_for_pe 
+fastp v0.23.4, time used: 2885 seconds
+```
+
+In this code, I see `JSON report: /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/C1R1-14C-D20-E1_fastp.json`: however, when I look in my directory, I am not seeing this. Let me poke around...maybe I just put things in a strange file path when I hard coded the output. 
+
+I changed my array header to include an email notification step: 
+`#SBATCH --mail-type=ALL` so that I will recieve email notifications about my submitted tasks. 
+
+...on second thought, when I look at the files, it seems like there might be an appropriate amount of them. I will write some code to check the unique file names vs. the outputs to ensure everything is on track. 
+
+I have: 
+- unique file text
+- file names in the format {sample name}_trimmed_r{#}.fastq.gz
+
+Perhaps a for loop that outputs a "yes," or "no," for every file that is in the correct format. I will need to use variables and inputs from the unique list to format this. I also think that this will be a useful documentatoin step as I go: each file successfully output (x) step, because manually checking the 70 files each time will be quite strenuous and error prone. 
+
+```
+#!/bin/bash
+
+# Path to your file containing the unique sample prefixes
+SAMPLE_LIST="unique_samples.txt"
+
+# Directory where your trimmed fastq.gz files are stored 
+# (Change "." to the actual path if they are in a different folder)
+OUTPUT_DIR="."
+
+echo "========================================="
+echo "   Trimmed File Verification Report"
+echo "========================================="
+
+# Loop through each unique sample name in the text file
+while IFS= read -r sample || [[ -n "$sample" ]]; do
+    # Skip empty lines if any exist in the file
+    [ -z "$sample" ] && continue
+
+    # Define the expected filenames for both pairs
+    R1_FILE="${OUTPUT_DIR}/${sample}_trimmed_R1.fastq.gz"
+    R2_FILE="${OUTPUT_DIR}/${sample}_trimmed_R2.fastq.gz"
+
+    # Check if both files exist
+    if [[ -f "$R1_FILE" && -f "$R2_FILE" ]]; then
+        echo "[ X ] $sample : Both r1 and r2 found."
+    elif [[ -f "$R1_FILE" ]]; then
+        echo "[ ! ] $sample : MISSING r2 file!"
+    elif [[ -f "$R2_FILE" ]]; then
+        echo "[ ! ] $sample : MISSING r1 file!"
+    else
+        echo "[   ] $sample : NO trimmed files found."
+    fi
+
+done < "$SAMPLE_LIST"
+
+echo "========================================="
+```
+
+...okay so they all ran and I am just clueless. Woo!
+
+Next step: 
+* download the reference genome for mapping
+* make sure bwa-mem2 will be downloaded for mapping (`module spider bwa-mem2`), and check out some of the documentation. 
+* Map to reference
+
+This should be the command to download the reference genome. 
+
+`wget "ftp.ncbi.nlm.nih.gov/genomes/all/GCF/965/363/235/GCF_965363235.1_xbMytGall1.hap1.1/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.gz"`
+
+This part was actually less straightforward than I imagined. I had a reference genome picked out from a paper, but when I went to NCBI, there were multiple choices for references. Intriguing! From there, I saw that NCBI had a reference with a checkmark next to it that was designated as *the* reference genome. Alright. I chatted with Gwen, and she explained that that genome is good because it is haplotype phased...I had never heard this term before. 
+
+Here is a website and a video link that provide some interesting schematics and explanations: https://www.pacb.com/blog/ploidy-haplotypes-and-phasing/; https://www.youtube.com/watch?v=15NPZCGP_e4
+From consulting these, I now understand that phasing helps elucidate haplotype blocks inherited from the mother and the father more clearly than unphased data. I wonder why that would be prefereable in a reference genome, where this reference mussel is not related directly to any of my samples? 
+-> from a reddit user...lol not amazing source but anyway...phased genomes may give better data for any imputation that occurs. This is a compelling reason for me to use it other than "it seems better."
+
+To get this link, I copied the url for the website of the reference I chose (starting at ftp. and deleting the https:/) then, copied the .fna file string lower on the website. This was not inutitive, so hopefully this note will help me in the future. 
+
+```
+#!/bin/bash
+#SBATCH --job-name=download_ref
+#SBATCH --partition=short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=2G
+#SBATCH --time=00:30:00
+#SBATCH --output=download_%j.out
+#SBATCH --error=download_%j.err
+
+# wget command from ecological genomics and reference genome from NCBI
+wget "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/965/363/235/GCF_965363235.1_xbMytGall1.hap1.1/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.gz"
+```
+
+Next, I will develop my scripts to run bwa-mem2. This program will align my fastq files with the reference that I just downloaded. 
+
+First, I will need to make sure that the VACC has bwa-mem2 with `module spider`. From there, I will look at the commands that the command executes and search some other scripts. 
+It is already on the VACC. Nice. Next, I needed to load it, then I checked its functionalities. The three comands that it output are: 
+```
+Usage: bwa-mem2 <command> <arguments>
+Commands:
+  index         create index
+  mem           alignment
+  version       print version number
+  ```
+  
+Seems pretty straight forward?
+
+```
+#!/bin/bash
+#SBATCH --job-name=bwa_map_array
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=45G
+#SBATCH --time=04:00:00
+#SBATCH --array=1-70
+#SBATCH --output=logs/map_%A_%a.out
+#SBATCH --error=logs/map_%A_%a.err
+
+
+# SLURM will send me an email when the job is started, finished, and submitted
+#SBATCH --mail-type=ALL
+
+# This is a script for mapping my mussel samples to the Mytilus galloprovincialis reference genome. 
+
+# ------------------------------------------------------------------
+# 1. ENVIRONMENT & DIRECTORIES
+# ------------------------------------------------------------------
+# Load bwa-mem2 - the most up to date version as of June 2026
+module load bwa-mem2/2.2.1
+
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+REF_GENOME="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+TRIM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed"
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/mapped"
+
+# errors will output in the logs folder that is inside the mapped folder - see sbatch header
+
+# ------------------------------------------------------------------
+# 2. MATCH SLURM TASK ID TO SAMPLE NAME
+# ------------------------------------------------------------------
+# Extract the specific line from the unique sample text file matching this task index
+NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" ${SAMPLE_LIST})
+
+# Print standard documentation to the .out log for auditing
+echo "Processing Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Sample Name extracted: ${NAME}"
+echo "Running on Node: ${SLURMD_NODENAME}"
+
+# ------------------------------------------------------------------
+# 3. DEFINE INPUTS/OUTPUTS & RUN MAPPING
+# ------------------------------------------------------------------
+# Match your trimmed filename format
+READ1="${TRIM_DIR}/${NAME}_trimmed_R1.fastq.gz"
+READ2="${TRIM_DIR}/${NAME}_trimmed_R2.fastq.gz"
+OUT_SAM="${OUT_DIR}/${NAME}.sam"
+
+# Execute bwa-mem2 utilizing the 10 cpus requested from Slurm
+bwa-mem2 mem -t 10 ${REF_GENOME} ${READ1} ${READ2} > ${OUT_SAM}
+
+echo "Mapping complete for ${NAME}."
+```
+
+bwa-mem2 can have issues based on which VACC node it is ran on; Gwen has ran into this, and upon checking out the VACC documentation website, https://www.uvm.edu/vacc/docs/start_guide/running_jobs/ it seems that when you request a node for the job, your stuff will get submitted to the first available node. Not all nodeas have the hardware to support bwa-mem2 (or at least that is our working hypothesis that Benett at the VACC will confirm or deny). 
+
+I will run a trial array, then move on depending on the output: 
+`sbatch --array=1-1 mapping.sh` 
+
+...it wrote out a .sam that was 0 in length. I will come back to this later! I tried! 
+
+------
+
+------
+<div id='id-section17'/> 
+
+### Entry 17: 2026-06-05
+
+Today, I am going to:
+1. Index the reference genome
+2. Correct my array script so that it runs better
+3. Set up code to check that all of my files go through the mapping script
+
+1. Index the reference genome
+So, Gwen's hypothesis was confirmed: bwa-mem2 can only run on VACC nodes with specific processors. I ran the command `show_node_restraints`, which output: 
+```
+The following are all the currently available constraints and the nodes
+to which they apply.
+
+NODELIST               AVAIL_FEATURES
+node[250-258]          10g, cascadelake, intel, noib
+node[300-311,314-338]  epyc_7763, amd, ib, ib1
+node[400-420]          epyc_9654, amd, ib, ib2
+node[500-516]          amd, ib, ib3
+hc-node[01-02]         epyc_7F52, amd, hc, ib
+shared1                epyc_7543
+hgnode[01-02]          GPU_SKU:H100_SXM, GPU_SKU:H100, GPU_GEN:HOPPER, GPU_FP:FP32, GPU_FP:FP64, GPU_MEM:80GB, GPU_CC:9.0, GPU_ANY, h100
+h2xnode[01-05]         GPU_SKU:H200_SXM, GPU_SKU:H200, GPU_GEN:HOPPER, GPU_FP:FP32, GPU_FP:FP64, GPU_MEM:140GB, GPU_CC:9.0, GPU_ANY
+h2node[01-16]          GPU_SKU:H200_NVL, GPU_SKU:H200, GPU_GEN:HOPPER, GPU_FP:FP32, GPU_FP:FP64, GPU_MEM:140GB, GPU_CC:9.0, GPU_ANY, h200
+r6node[01-06]          GPU_SKU:RTX6000, GPU_GEN:BLACKWELL, GPU_FP:FP32, GPU_MEM:96GB, GPU_CC:12.0, GPU_ANY
+gpunode001             GPU_SKU:A100, GPU_GEN:AMPERE, GPU_FP:FP32, GPU_FP:FP64, GPU_MEM:40GB, GPU_CC:8.0, GPU_ANY, a100
+```
+
+Upon consulting with AI...it seems that : "The AMD nodes (node[300-338] and node[400-420]) run on epyc_7763 (Zen 3) and epyc_9654 (Zen 4) processors. Zen 4 architecture (epyc_9654, which are nodes 400 to 420) natively supports the full suite of AVX-512 instructions—including AVX512BW!"...alright, so I will run subsequent jobs that are on these nodes. 
+
+First, the indexing step: 
+* cd into my reference folder
+* tmux: `tmux new -s index`
+* `srun --partition=general --constraint=ib1 --cpus-per-task=1 --mem=150G --time=05:00:00 --pty bash`
+* `module load bwa-mem2/2.2.1` 
+# * `gunzip GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.gz` <- THIS WAS UNNEEDED <- the reference must be unzipped for this step and future steps. The mapping.sh script will also reference the unzipped file. When I ran this command, it did not also save the zipped file...it just overwrote it with the unzipped one. 
+* `bwa-mem2 index GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna`
+
+When I ran that command, I got the following output: 
+`Looking to launch executable "/gpfs1/sw/rh9/pkgs/bwa-mem2/2.2.1/bwa-mem2.avx512bw", simd = .avx512bw
+Launching executable "/gpfs1/sw/rh9/pkgs/bwa-mem2/2.2.1/bwa-mem2.avx512bw"
+
+Please verify that both the operating system and the processor support Intel(R) X87, CMOV, MMX, FXSAVE, SSE, SSE2, SSE3, SSSE3, SSE4_1, SSE4_2, MOVBE, POPCNT, F16C, AVX, FMA, BMI, LZCNT, AVX2, AVX512DQ, AVX512F, ADX, AVX512CD, AVX512BW, AVX512VL and CLWB instructions.`
+So...no progress, exactly. Gwen will imminently share with me how she successfully ran this. I am hopeful that I can start the indexing today and get the rest of the steps done by this weekend...tbd.
+
+2. Update my array script
+Gwen gave me these lines that she included in her sbatch header that made her files run: 
+```
+#SBATCH -t 20:00:00
+#SBATCH --constraint=ib1
+```
+
+So, I will put these into my mapping.sh file from yesterday: 
+```
+#!/bin/bash
+#SBATCH --job-name=bwa_map_array
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=50G
+#SBATCH --time=04:00:00
+#SBATCH --constraint=ib1
+#SBATCH --array=1-70
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/mapped/logs/map_%A_%a.out
+#SBATCH --error=/gpfs2/scratch/edombro1/aus_mussels/data/mapped/logs/map_%A_%a.err
+
+
+# SLURM will send me an email when the job is started, finished, and submitted
+#SBATCH --mail-type=ALL
+
+# This is a script for mapping my mussel samples to the Mytilus galloprovincialis reference genome. 
+
+# ------------------------------------------------------------------
+# 1. ENVIRONMENT & DIRECTORIES
+# ------------------------------------------------------------------
+# Load bwa-mem2 - the most up to date version as of June 2026
+module load bwa-mem2/2.2.1
+
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+REF_GENOME="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+TRIM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed"
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/mapped"
+
+# errors will output in the logs folder that is inside the mapped folder - see sbatch header
+
+# ------------------------------------------------------------------
+# 2. MATCH SLURM TASK ID TO SAMPLE NAME
+# ------------------------------------------------------------------
+# Extract the specific line from the unique sample text file matching this task index
+NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" ${SAMPLE_LIST})
+
+# Print standard documentation to the .out log for auditing
+echo "Processing Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Sample Name extracted: ${NAME}"
+echo "Running on Node: ${SLURMD_NODENAME}"
+
+# ------------------------------------------------------------------
+# 3. DEFINE INPUTS/OUTPUTS & RUN MAPPING
+# ------------------------------------------------------------------
+# Match your trimmed filename format
+READ1="${TRIM_DIR}/${NAME}_trimmed_R1.fastq.gz"
+READ2="${TRIM_DIR}/${NAME}_trimmed_R2.fastq.gz"
+OUT_SAM="${OUT_DIR}/${NAME}.sam"
+
+# Execute bwa-mem2 utilizing the 10 cpus requested from Slurm
+bwa-mem2 mem -t 10 ${REF_GENOME} ${READ1} ${READ2} > ${OUT_SAM}
+
+echo "Mapping complete for ${NAME}."
+```
+
+3. Set up code to check that all of my files go through the mapping script
+
+```
+#!/bin/bash
+
+# Path to your file containing the unique sample prefixes
+SAMPLE_LIST="gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+
+# Directory where mapped files are stored 
+OUTPUT_DIR="gpfs2/scratch/edombro1/aus_mussels/data/mapped"
+
+echo "========================================="
+echo "   Mapped File Verification Report"
+echo "========================================="
+
+# Loop through each unique sample name in the text file
+while IFS= read -r sample || [[ -n "$sample" ]]; do
+    # Skip empty lines if any exist in the file
+    [ -z "$sample" ] && continue
+
+    # Define the expected filenames for both pairs
+    MAP_FILE="${OUTPUT_DIR}/${sample}.sam" 
+
+    # Check if both files exist
+    if [[ -f "MAP_FILE" ]]; then
+        echo "[ X ] $sample : Mapped file found."
+    else
+        echo "[   ] $sample : NO mapped filee found."
+    fi
+
+done < "$SAMPLE_LIST"
+
+echo "========================================="
+```
+
+------
+
+------
+<div id='id-section18'/> 
+
+### Entry 18: 2026-06-08
+
+I am back; I did not run anything this weekend. First thing: I need to make sure the appropriate files came out of my bwa-mem2 indexing. So, I need to do some reading on what the indexing output files should be...
+
+So, the output files from the indexing job should be files ending with: 
+* .0123
+* .amb
+* .ann
+* .bwt.2bit.64
+* .pac
+
+It looks like I have these files, so I think that everything worked. My next step will be to launch my mapping array.
+
+Before launching my mapping array this morning, I made the following updates and annotations to my script: 
+```
+#!/bin/bash
+#SBATCH --job-name=bwa_map_array
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=50G
+#SBATCH --time=04:00:00
+#SBATCH --constraint=ib1
+#SBATCH --array=1-70
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/mapped/logs/map_%A_%a.out
+#SBATCH --error=/gpfs2/scratch/edombro1/aus_mussels/data/mapped/logs/map_%A_%a.err
+
+# constraint must be specified for this package to run
+
+# SLURM will send me an email when the job is started, finished, and submitted
+#SBATCH --mail-type=ALL
+
+# This is a script for mapping my mussel samples to the Mytilus galloprovincialis reference genome. 
+
+# ------------------------------------------------------------------
+# 1. ENVIRONMENT & DIRECTORIES
+# ------------------------------------------------------------------
+# Load bwa-mem2 - the most up to date version as of June 2026
+module load bwa-mem2/2.2.1
+
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+REF_GENOME="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+TRIM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed"
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/mapped"
+
+# errors will output in the logs folder that is inside the mapped folder - see sbatch header
+
+# ------------------------------------------------------------------
+# 2. MATCH SLURM TASK ID TO SAMPLE NAME
+# ------------------------------------------------------------------
+# Extract the specific line from the unique sample text file matching this task index
+NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" ${SAMPLE_LIST})
+
+# Print standard documentation to the .out log for auditing
+echo "Processing Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Sample Name extracted: ${NAME}"
+echo "Running on Node: ${SLURMD_NODENAME}"
+
+# ------------------------------------------------------------------
+# 3. DEFINE INPUTS/OUTPUTS & RUN MAPPING
+# ------------------------------------------------------------------
+# Match your trimmed filename format
+READ1="${TRIM_DIR}/${NAME}_trimmed_R1.fastq.gz"
+READ2="${TRIM_DIR}/${NAME}_trimmed_R2.fastq.gz"
+OUT_SAM="${OUT_DIR}/${NAME}.sam"
+
+# Execute bwa-mem2 utilizing the 10 cpus requested from Slurm; this command requires the reference genome to be indexed first (behind the scenes)
+bwa-mem2 mem -t 10 ${REF_GENOME} ${READ1} ${READ2} > ${OUT_SAM}
+
+echo "Mapping complete for ${NAME}."
+```
+
+I will run this step with the capacitor for good vacc protocol...and because I will move to other tasks and prepare future scripts from here. 
+
+`sbatch --array=1-1 mapping.sh` 
+...so, I came back to this after 3 hours. It is still going. I wonder if I will need to give it more time? I would prefer a larger margin, but also, if I run this with the capacitor, it will probably take at least a full day. Good to know before deploying it. 
+
+The 4 hour window was not enough, so I will do it again. I'm going to remove the old files and run the whole array but with the capacitor...
+
+`sbatch --array=1-70%5 mapping.sh`
+
+I deployed that and have no imminent hopes of it getting done soon. So, I will be reading up on how to convert the .sam files to .bam files. I also want to do some steps to check for reference bias. I will be consulting our ecological genomics files and I even found a youtube video. 
+
+Here is the samtool's website:
+* https://www.htslib.org/doc/samtools.html
+
+Some useful information:
+- flagstat: passses through the input file and 
+
+------
+
+------
+<div id='id-section19'/> 
+
+### Entry 19: 2026-06-09
+
+I must have been delusional thinking that 4 hours per file would be enough for my sequence alignment array. After checking in today, 10 hours per sample is not enough - a lot of them are timing out. I'm going to let the array run until the end of the work day, then I will stop it and purge the incomplete files by using a grep command in the error log files. 
+
+The universe loves me, so the VACC is down tomorrow. I will wait until it is back up and re-launch my array on late Wednesday night/Thursday. 
+
+------
+
+------
+<div id='id-section20'/> 
+
+### Entry 20: 2026-06-11
+
+So, my job partially kept running even while the VACC was under maintenance...cool! Still, not all of the files completely mapped. I bumped the timing in my mapping script to 24 hours and bumped up the throttle to allow 10 jobs to run at once. I cleared out the incomplete .sam files and re-started the array with the following command: 
+`sbatch --array=2,3,5,7-10,12,14,15,18-20,23,26,27,32,35-70%10 mapping.sh`
+to get the files that had to be re-done...about half were not properly aligning, so hopefully this will do the trick. I will report back. 
+
+I used a loop with grep to look at the error files and identify which samples timed out in relation to their position in the array. Once I am done, I will run the loop to ensure all files have been created and double check that all ran correctly and didn't time out. This seems like it would create trouble down the line. 
+
+Another fun thing going on for me: At this rate, I am going to blow out the scratch storage space with how big the sequence alignment files are. So, I have officially decided to use the CRAM storage technique instead of the BAM. To properly implement this without using up all of the space, I have to run these two scripts at the same time. 
+The benefits to CRAM: 
+* retains all the same information as a BAM file
+* more compressed; can keep the same amount of storage 
+Cons:
+* more computationally intensive
+* requires a stored copy of the reference genome
+
+...the drawbacks are very small compared to paying thousands of dollars to store terrabytes of sequence data. So, that shall be my next step. The plan is to delete the sam files and re-write them as CRAM files. 
+
+Here's my new script for `sam_to_cram.sh`
+
+```
+#!/bin/bash
+#SBATCH --job-name=sam2cram
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=8G
+#SBATCH --time=06:00:00
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/cram/logs/cram_%a.out
+
+# 1. LOAD REQUIRED MODULES - dependency plus sam tools
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19.2-pfmpoam
+
+# 2. DEFINE FILE PATHS - reference genome, sam files, cram outputs, error log files for sams, and sample names
+REF_GENOME="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+SAM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/mapped"
+CRAM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/cram"
+MAPPING_LOG_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/mapped/logs"
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+
+# 3. FILE NAMES
+# use task name and sample to name files
+SAMPLE_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${SAMPLE_LIST}")
+
+INPUT_SAM="${SAM_DIR}/${SAMPLE_NAME}.sam"
+OUTPUT_CRAM="${CRAM_DIR}/${SAMPLE_NAME}.cram"
+
+# Grabs the Master Job ID from the command line argument you type
+MAPPING_JOB_ID=$1
+
+if [ -z "${MAPPING_JOB_ID}" ]; then
+    echo "ERROR: You forgot to provide the mapping Master Job ID!" >&2
+    echo "Usage: sbatch --array=ID sam_to_cram.sh <MAPPING_JOB_ID>" >&2
+    exit 1
+fi
+
+# Dynamically reconstructs your exact 'map_%A_%a.err' layout from disk
+MAPPING_LOG="${MAPPING_LOG_DIR}/map_${MAPPING_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err"
+
+echo "--------------------------------------------------"
+echo "Slurm Array Task ID: ${SLURM_ARRAY_TASK_ID}"
+echo "Processing Sample Name: ${SAMPLE_NAME}"
+echo "--------------------------------------------------"
+
+# =====================================================================
+# TAILORED LOG VALIDATION: CHECKING FOR ABORT SIGNATURES IN LOG FILES
+# =====================================================================
+echo "Auditing original mapping log: ${MAPPING_LOG}"
+
+if [ ! -f "${MAPPING_LOG}" ]; then
+    echo "ERROR: Original mapping log file does not exist!" >&2
+    echo "sam didn't complete?" >&2
+    exit 1
+fi
+
+# Check for Slurm timeout kill tags or common pipeline errors
+if grep -q "DUE TO TIME LIMIT" "${MAPPING_LOG}"; then
+    echo "ERROR: Detected Slurm walltime timeout signature." >&2
+    echo "sam didn't complete?" >&2
+    exit 1
+elif grep -E -iq "error|fail|sigkill|oom|out of memory" "${MAPPING_LOG}"; then
+    echo "ERROR: Found failure keywords in the mapping log!" >&2
+    echo "sam didn't complete?" >&2
+    exit 1
+fi
+
+echo "Mapping log verified cleanly. Proceeding to compression..."
+
+# =====================================================================
+# 4. RUN LOSSLESS CRAM CONVERSION & COORDINATE SORT IN ONE STEP
+# =====================================================================
+echo "Compressing and coordinate-sorting SAM directly to CRAM..."
+
+# In the original file, I used 'samtools view' 
+# This version replaces that with 'samtools sort' to INDEX the files 
+samtools sort -@ 2 -O CRAM --reference "${REF_GENOME}" -o "${OUTPUT_CRAM}" "${INPUT_SAM}"
+
+
+# =====================================================================
+# 5. INDEX THE NEW SORTED CRAM FILE
+# =====================================================================
+echo "Generating structural index..."
+
+samtools index "${OUTPUT_CRAM}"
+
+
+# =====================================================================
+# 6. FOOLPROOF SAFETY PURGE BLOCK
+# =====================================================================
+# $? checks the exit status of the 'samtools index' command. 0 means perfection.
+if [ $? -eq 0 ] && [ -f "${OUTPUT_CRAM}.crai" ]; then
+    
+    # This line calculates the size of the new .crai index file in bytes.
+    INDEX_SIZE=$(stat -c%s "${OUTPUT_CRAM}.crai")
+    
+    # A real, healthy genomic index must be larger than 10KB (10,000 bytes).
+    # If it's a tiny double-digit file, something went wrong!
+    if [ "${INDEX_SIZE}" -gt 10000 ]; then
+        echo "CRAM and Index verified successfully. Purging raw SAM file to save space..."
+        rm "${INPUT_SAM}"
+    else
+        echo "CRITICAL ERROR: Index file generated, but size (${INDEX_SIZE} bytes) is suspiciously small!" >&2
+        echo "Keeping raw SAM file for safety." >&2
+        exit 1
+    fi
+else
+    echo "CRITICAL ERROR: CRAM sorting or indexing failed! Keeping raw SAM file." >&2
+    exit 1
+fi
+
+echo "Task ${SLURM_ARRAY_TASK_ID} (${SAMPLE_NAME}) complete!"
+```
+
+To modify permissions and allow this to work: 
+`chmod +x sam_to_cram.sh`
+
+Running the array: 
+`sbatch --array=1,4,6,11,13,16,17,21,22,24,25,28,29,30,31,33,34 /gpfs2/scratch/edombro1/aus_mussels/scripts/sam_to_cram.sh 4392772`
+executed from my scripts folder. 
+
+I came back to check on my files, and the cram files have started to generate and delete the sam files, but I got this error when I checked the output files: 
+```
+cat cram_11.out 
+--------------------------------------------------
+Slurm Array Task ID: 11
+Processing Sample Name: B2R1-22C-D10-E1
+--------------------------------------------------
+Auditing original mapping log: /gpfs2/scratch/edombro1/aus_mussels/data/mapped/logs/map_4392772_11.err
+Mapping log verified cleanly. Proceeding to compression...
+[E::cram_index_build_multiref] CRAM file is not sorted by chromosome / position
+samtools index: failed to create index for "/gpfs2/scratch/edombro1/aus_mussels/data/cram/B2R1-22C-D10-E1.cram"
+CRAM verified successfully. Purging raw SAM file to save space...
+Task 11 (B2R1-22C-D10-E1) complete!
+```
+...so, (1) The sam files were deleted. (2) the cram files were generated. (3) BUT, they are not *indexed.* So, .cram files were generated, but I really needed the .crai files. These also did generate, but they had very low file sizes. They are not easily searchable (that is what unindexed means). I can run a loop to fix this. I went ahead and cancelled the sam_to_cram.sh script that is currently running, and I will run the following line.  
+
+Part 1: request a new job with srun
+tmux attach; cd into cram folder
+`srun --partition=short --nodes=1 --ntasks=1 --cpus-per-task=4 --mem=24G --time=03:00:00 --pty /bin/bash`
+
+Part 2: run the new job to index time
+```
+module load gcc/13.3.0-xp3epyt samtools/1.19.2-pfmpoam
+cd /gpfs2/scratch/edombro1/aus_mussels/data/cram
+
+REF="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+
+for cramfile in *.cram; do
+    echo "----------------------------------------"
+    echo "Fixing and coordinate-sorting: ${cramfile}"
+    echo "----------------------------------------"
+
+    # 1. Sort the unsorted CRAM into a temporary clean file
+    samtools sort -@ 4 -O CRAM --reference "$REF" -o "sorted_${cramfile}" "${cramfile}"
+
+    # 2. Build a real genomic index for it
+    samtools index "sorted_${cramfile}"
+
+    # 3. Double check that the new index is a real file (larger than 10KB)
+    if [ -f "sorted_${cramfile}.crai" ] && [ $(stat -c%s "sorted_${cramfile}.crai") -gt 10000 ]; then
+        echo "Success! Replacing old file with sorted data and index."
+        mv "sorted_${cramfile}" "${cramfile}"
+        mv "sorted_${cramfile}.crai" "${cramfile}.crai"
+    else
+        echo "ERROR fixing ${cramfile}. Leaving original intact."
+        rm -f "sorted_${cramfile}" "sorted_${cramfile}.crai"
+    fi
+done
+```
+
+This timed out, so I started re-running the same code with a 12 hour time limit. 
+
+I also modified my sam_to_cram.sh (above and in terminal) so that it will be ready when my new sam files are done mapping. That is all for today! I am exhausted. 
+
+------
+
+------
+<div id='id-section21'/> 
+
+### Entry 21: 2026-06-12
+
+Alight. I let everything run yesterday and the following samples have finished up: 
+
+2:B1R1-D1-E1
+3:B1R2-14C-D10-E1
+4:B1R2-22C-D10-E1
+5:B1R2-D1-E1
+7:B1R3-B2R1-22-D10-E1
+8:B1R3-D1-E1
+9:B1R4-D1-E1
+10:B1R5-D1-E1
+12:B2R1-D1-E1
+14:B2R2-22C-D10-E1
+15:B2R2-D1-E1
+18:B2R3-D1-E1
+19:B2R4-D1-E1
+20:B2R6-D1-E1
+23:B3R1-D1-E1
+26:B3R2-D1-E1
+27:B3R3-14C-D10-E1
+32:C1R1-14C-D20-E1
+35:C1R2-14C-D20-E1
+36:C1R2-22C-D19-E1
+37:C1R3-14C-D20-E1
+38:C1R3-22C-D19-E1
+
+So, today, with my modified sam_to_cram.sh script, I will run the following command to interleave and minimize space: 
+`sbatch --array=2-5,7-10,12,14,15,18-20,23,26,27,32,35-38 /gpfs2/scratch/edombro1/aus_mussels/scripts/sam_to_cram.sh 4410682`
+
+------
+
+------
+<div id='id-section22'/> 
+
+### Entry 22: 2026-06-13
+
+Logging on for the weekend. Let's do some stuff. Status: currently, the array is on file 60...almost done! Let's get the cram and crai files generating. 
+
+Here's the command I will run: 
+`sbatch --array=4,39-58 sam_to_cram.sh 4410682` after looking at the outputs in that have since loaded. The mapping array is almost done, sweet!
+
+Running. We will check this monday.
+
+------
+
+------
+<div id='id-section23'/> 
+
+### Entry 23: 2026-06-15
+
+Back to check in. I got an email that my array finished over the weekend. Today's goals are: 
+* Launch the final sam to cram script
+* read up on the best variant calling type for this data
+* remove PCR duplicates
+
+I am really hoping to have some kind of visualization by the end of the month. That is my current goal, then to have all of July to really get into the weeds and make progress towards my AMMR presentation.
+
+I will run this in my terminal to get array numbers for files that have finished running to launch my sam to cram array.
+
+`grep -nE "M01|M04|M05|M06|M07|M08|M09|M10|M11|M12|M2-GR-E1|M3-GR-E2" /gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt`
+
+This prints the line numbers of the array items so that I know what to type into my job manager. Here is the command I will run to finish this out: 
+
+`sbatch --array=59-70 sam_to_cram.sh 4410682`
+
+Now, I will do some reading and scripting about picard and the best way to do variant calling. At some point, I will need to check bias towards the reference genome.
+
+------
+
+------
+<div id='id-section24'/> 
+
+### Entry 24: 2026-06-16
+
+My files were all successfully converted! My current directory size is the following (using `du -sh *` command in my aus_mussels folder): 
+
+`5.7T    data` and `9.5K    scripts`
+
+Next, I will remove PCR duplicates using Picard on the CRAM Files. I was a bit worried that it would not work with the CRAM files or that I should have removed them using samtools earlier in my pipe line, but it looks like Picard can use these files (even when I do module spider in the terminal, it mentions it!).
+
+```
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+  picard: picard/3.1.1-otrgwkh
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+    You will need to load all module(s) on any one of the lines below before the "picard/3.1.1-otrgwkh" module is available to load.
+      gcc/13.3.0-xp3epyt
+ 
+    Help:
+      Picard is a set of command line tools for manipulating high-throughput
+      sequencing (HTS) data and formats such as SAM/BAM/CRAM and VCF.
+```
+
+So, for this process, we are going to do .CRAM and .CRAI files -> .dedup files. I should probably make a new folder for these. Let's also start our script.
+
+To do before implementing this script: 
+* dedup folder [X]
+* logs file in dedup folder [X]
+
+Here are some links for using picard that helped me with this script: 
+* https://gatk.broadinstitute.org/hc/en-us/articles/360037052812-MarkDuplicates-Picard
+* https://broadinstitute.github.io/picard/
+
+dedup.sh: 
+```
+#!/bin/bash
+#SBATCH --job-name=dedup
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=32G
+#SBATCH --time=10:00:00
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs/dedup_%a.out
+
+# this script will take an input .cram file and mark and remove 
+
+# 1. LOAD REQUIRED MODULES - dependency plus picard, and samtools for indexing later
+module load gcc/13.3.0-xp3epyt
+module load picard/3.1.1-otrgwkh
+module load samtools/1.19.2-pfmpoam
+
+
+# 2. DEFINE FILE PATHS - reference genome, cram files, error log files, and sample names
+REF_GENOME="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+CRAM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/cram"
+DEDUP_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/dedup"
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+
+# 3. FILE NAMES - use task name and sample to name files
+SAMPLE_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${SAMPLE_LIST}")
+
+INPUT_CRAM="${CRAM_DIR}/${SAMPLE_NAME}.cram"
+DEDUP_CRAM="${DEDUP_DIR}/${SAMPLE_NAME}_dedup.cram"
+METRICS_FILE="${DEDUP_DIR}/logs/${SAMPLE_NAME}_metrics.txt"
+
+# 4. MARK AND REMOVE DUPLICATES - use java syntax and populate file names to mark and remove duplicates
+
+echo "Starting Picard MarkDuplicates on: ${SAMPLE_NAME}"
+
+java -Xmx28g -jar $PICARD MarkDuplicates \
+      I=${INPUT_CRAM} \
+      O=${DEDUP_CRAM} \
+      M=${METRICS_FILE} \
+      REFERENCE_SEQUENCE=${REF_GENOME} \
+      REMOVE_DUPLICATES=true \
+      VALIDATION_STRINGENCY=LENIENT
+
+# 5. RE-INDEX AND CLEAN UP - requires samtools
+if [ $? -eq 0 ] && [ -f "${DEDUP_CRAM}" ]; then
+    echo "Picard finished successfully. Generating new matching .crai index..."
+    
+    # Build the brand-new index file
+    samtools index "${DEDUP_CRAM}"
+    
+    echo "Deduplication and indexing complete for ${SAMPLE_NAME}."
+else
+    echo "ERROR: Picard MarkDuplicates failed or output file is missing!" >&2
+    exit 1
+fi
+
+```
+
+Running a trial: `sbatch --array 1 dedup.sh`
+
+------
+
+
+------
+<div id='id-section25'/> 
+
+### Entry 25: 2026-06-17
+
+I came back this morning and my trial array from yesterday had finished around midnight. It seems like the 10 hour time window should be sufficient. Upon arriving, I immediately wondered how much data was output in the deduplicated file vs. original files (because I am terrified of running out of storage, as always).
+
+It turns out that the deduplicated files actually use *more* storage than the originals; something about how the java-ran picard compresses them. For this run, for example, the original .cram file was 32G, while the dedup.cram was 35G. So, marginally bigger despite compression. Nonetheless, I am convinced that it did deduplicate the pcr copies from the data in the metrics file: 
+
+```## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=[/gpfs2/scratch/edombro1/aus_mussels/data/cram/B1R1-14C-D10-E1.cram] OUTPUT=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/B1R1-14C-D10-E1_dedup.cram METRICS_FILE=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs/B1R1-14C-D10-E1_metrics.txt REMOVE_DUPLICATES=true VALIDATION_STRINGENCY=LENIENT REFERENCE_SEQUENCE=/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna    MAX_SEQUENCES_FOR_DISK_READ_ENDS_MAP=50000 MAX_FILE_HANDLES_FOR_READ_ENDS_MAP=8000 SORTING_COLLECTION_SIZE_RATIO=0.25 TAG_DUPLICATE_SET_MEMBERS=false REMOVE_SEQUENCING_DUPLICATES=false TAGGING_POLICY=DontTag CLEAR_DT=true DUPLEX_UMI=false FLOW_MODE=false FLOW_QUALITY_SUM_STRATEGY=false USE_END_IN_UNPAIRED_READS=false USE_UNPAIRED_CLIPPED_END=false UNPAIRED_END_UNCERTAINTY=0 FLOW_SKIP_FIRST_N_FLOWS=0 FLOW_Q_IS_KNOWN_END=false FLOW_EFFECTIVE_QUALITY_THRESHOLD=15 ADD_PG_TAG_TO_READS=true ASSUME_SORTED=false DUPLICATE_SCORING_STRATEGY=SUM_OF_BASE_QUALITIES PROGRAM_RECORD_ID=MarkDuplicates PROGRAM_GROUP_NAME=MarkDuplicates READ_NAME_REGEX=<optimized capture of last three ':' separated fields as numeric values> OPTICAL_DUPLICATE_PIXEL_DISTANCE=100 MAX_OPTICAL_DUPLICATE_SET_SIZE=300000 VERBOSITY=INFO QUIET=false COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false
+## htsjdk.samtools.metrics.StringHeader
+# Started on: Tue Jun 16 15:42:53 EDT 2026
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+Unknown Library	8889829	274955085	29807729	527164565	5950753	63140894	44320953	0.236637	1335212899
+
+## HISTOGRAM	java.lang.Double
+```
+
+The percent duplication was 0.236637. The run started around 4 pm and ended past midnight, indicating that the whole process tool around ~8 hours. I am hoping with the additional 4 hour buffer, all the samples should run. An interesting stat to pull from these files will be the percent duplication accross all runs; I bet using the grep and sed commands I can output a file with that info for reporting. 
+
+Given the array's successful run, I will launch the whole thing. The current cram directory is taking up 1.8 Tb. I suspect this will come out to around ~2 Tb with the extra few gigs and metric files for each run. There is sufficient room in scratch to run this (we are currently using 6.6 Tb out of 15).
+
+`sbatch --array=2-70%10 dedup.sh`
+
+
+Running as of 11:25 am. Will check back in. 
+
+------

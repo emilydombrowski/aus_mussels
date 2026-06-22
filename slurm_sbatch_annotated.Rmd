@@ -1,0 +1,127 @@
+---
+title: "slurm_sbatch_annotated"
+author: "Emily Dombrowski"
+date: "2026-06-01"
+output: html_document
+---
+1 June 2026
+
+For my australian mussel genomic data, I need to run an array that will facillitate fastq and fastp commands for trimming and cleaning. I am sure that I will need to run this type of code again, so this morning, I am spending some time making notes on some example code before starting to craft code for my own arrays. 
+
+Here are some websites I am using as source information for this: 
+* https://github.com/Jcbnunez/uvm-fqr/blob/main/Practicums/Pract4.1_Functions_Arrays_Power.md <- class website where arrays and parameter files are explained
+* https://slurm.schedmd.com/sbatch.html <- slurm and sbatch specific commands for reference
+* https://www.datacamp.com/blog/cpu-vs-gpu?utm_cid=22660585401&utm_aid=181540421715&utm_campaign=230119_1-ps-other~dsa-tofu~blog_2-b2c_3-nam_4-prc_5-na_6-na_7-le_8-pdsh-go_9-nb-e_10-na_11-na&utm_loc=9192404-&utm_mtd=-c&utm_kw=&utm_source=google&utm_medium=paid_search&utm_content=ps-other~nam-en~dsa~tofu~blog~data-science&gad_source=1&gad_campaignid=22660585401&gbraid=0AAAAADQ9WsGLAGgHq5SdxVbVAwRoJDYpS&gclid=Cj0KCQjw2_TQBhCnARIsAF3-Xhy8afRIERXh7f08-_bIwvxWqPpCPCzaE7t7t3gKKplZ5dcWJDDQgU8aAqivEALw_wcB <- basic information, like "what is a cpu?"
+
+To launch an array, I think the first step is to have a consistently formatted parameter file. This file should:
+* contain sample names
+* have / not have numbering: the array needs to reference a specific amount of files (does the array use 0 based indexing? I beleive if numbering is inconsistent it can cause some issues)
+
+This is an example of an array header that I will annotate. This is from Joaquin Nunez's Foundations of Quantitative reasoning class: https://github.com/Jcbnunez/uvm-fqr/blob/main/Practicums/Pract4.1_Functions_Arrays_Power.md
+```{r}
+#!/usr/bin/env bash  <- the "shebang"
+#  
+#SBATCH -J run_array  <- job title: when squeue is ran, this is what will come up
+#SBATCH -c 1  <- CPU core per task 
+#SBATCH -N 1 # on one node  <- specifying the number of nodes being used
+#SBATCH -t 1:00:00   <- amount of time requested
+#SBATCH --mem 8G   <- memory
+#SBATCH -o ./slurmOutput/myarray.%A_%a.out  <- output folder. See notes
+#SBATCH -p bluemoon  <- assigns job to a specific partition of the VACC
+#SBATCH --array=1-10  <- launches this many copies of this script (10)
+#SBATCH --account=biol6210 <- charges to a specific account
+
+```
+
+Notes: 
+* For `#SBATCH -c`, "multi-threading" is a thing: more than one cpu can be requested per task if this is available for the packages. For fastq and fastp, it is better to use 4 cpus.
+* each part of the job is spread out to one node. This makes the processing go faster.
+* If your job takes longer than the allocated amount of time, it will time out.
+* The output folder must exist before the job is started...this also stores error logs. The %A% situation is a placeholder that is replaced by the slurm task ID. 
+
+Considerations for my own data set:
+* Files are in two separate folders (artefact of how I specified the file path and the quantity of data: AGRF had to separate into two folders for download)
+* each sequence is accross multiple lanes -- my parameter file loop will need to take this into account. Additionally, this parameter file can be used for a meta data file.
+* I need the account number for our lab...unsure of how to find this
+
+This is code from AI about how to make a parameter file: 
+```
+# 1. Clear out any old versions and initiate new file
+> raw_list.txt
+
+# 2. Define the source path variable
+RAW_DIR="/netfiles/lockwood_lab/aus_mussels/data/raw"
+
+# 3. Scan both subfolders for Forward reads (R1)
+for f in ${RAW_DIR}/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4/*_R1.fastq.gz ${RAW_DIR}/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4/*_R1.fastq.gz; do
+    if [ -f "$f" ]; then
+        basename "$f" | cut -d'_' -f1 >> raw_list.txt
+    fi
+done
+
+# 4. Deduplicate and save the clean list of 70 samples
+sort -u raw_list.txt > unique_samples.txt
+rm raw_list.txt
+
+# 5. Check your work
+cat -n unique_samples.txt
+```
+
+This is code that AI helped me make for running my array PLUS my annotations: 
+```
+#!/bin/bash <- shebang
+#SBATCH --job-name=fastp_trim <- name of the job to reference
+#SBATCH --output=logs/trim_%A_%a.out <- ensures named outputs in separate files
+#SBATCH --error=logs/trim_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --array=1-70 <- number of files in array
+
+# Load fastp (equivalent to loading a library)
+module load fastp
+
+# Define raw data subfolders: loading brought 2 folders, so this is how to include both
+DIR1="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4"
+DIR2="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4"
+
+# Save outputs into the "trimmed" folder that I am working in
+OUT_DIR="."
+
+# Extract the specific sample ID for this Slurm task
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" unique_samples.txt)
+
+echo "Processing task ID ${SLURM_ARRAY_TASK_ID}: Sample ${SAMPLE}"
+
+# Determine which folder this specific sample lives in (again, remnant of two folders)
+if ls ${DIR1}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR1
+elif ls ${DIR2}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR2
+else
+    echo "ERROR: Sample ${SAMPLE} not found in either folder!"
+    exit 1
+fi
+
+# Run fastp, merging all 8 lanes via bash streaming on the fly
+# inputs both paired ends at the same time
+# outputs html
+# outputs json
+# quality of trimming: 20 
+fastp \
+  --thread 4 \
+  --in1 <(cat ${DATA_DIR}/${SAMPLE}_*_R1.fastq.gz) \
+  --in2 <(cat ${DATA_DIR}/${SAMPLE}_*_R2.fastq.gz) \
+  --out1 ${OUT_DIR}/${SAMPLE}_trimmed_R1.fastq.gz \
+  --out2 ${OUT_DIR}/${SAMPLE}_trimmed_R2.fastq.gz \
+  --html ${OUT_DIR}/${SAMPLE}_fastp.html \
+  --json ${OUT_DIR}/${SAMPLE}_fastp.json \
+  --qualified_quality_phred 20 \
+  --length_required 30 \
+  --detect_adapter_for_pe
+
+echo "Finished processing ${SAMPLE} safely."
+```
+
