@@ -34,6 +34,14 @@ This is a code notebook for my Australian mussel sequence data. I will use it to
 * [Entry 24: 2026-06-16](#id-section24)
 * [Entry 25: 2026-06-17](#id-section25)
 
+# Scripts
+* [trim_array.sh](#id-section13)
+* [mapping.sh](#id-section18)
+    * There are multiple, annotated versions of this script
+* [sam_to_cram.sh](#id-section20)
+* [dedup.sh](#id-section24)
+* [sam_cram_crai_dedup.sh](#id-section27)
+
 ------    
 <div id='id-section1'/> 
 
@@ -275,6 +283,9 @@ cat -n unique_samples.txt
 The code output a list with 70 files. Success! For now, seeing all the files just with their sequences, I do realize what a mess I made of naming them...thankfully, now that there is a list, I can go ahead and make a metadata with better names. Which is frustrating, but it is alright. 
 
 Next, I am making the following script into my trimmed directory: trim_array.sh
+
+#### trim_array.sh
+
 ```
 #!/bin/bash
 #SBATCH --job-name=fastp_trim
@@ -569,6 +580,8 @@ Commands:
   
 Seems pretty straight forward?
 
+#### mapping.sh
+
 ```
 #!/bin/bash
 #SBATCH --job-name=bwa_map_array
@@ -690,6 +703,9 @@ Gwen gave me these lines that she included in her sbatch header that made her fi
 ```
 
 So, I will put these into my mapping.sh file from yesterday: 
+
+#### mapping.sh (updated with constraints)
+
 ```
 #!/bin/bash
 #SBATCH --job-name=bwa_map_array
@@ -801,7 +817,10 @@ So, the output files from the indexing job should be files ending with:
 
 It looks like I have these files, so I think that everything worked. My next step will be to launch my mapping array.
 
-Before launching my mapping array this morning, I made the following updates and annotations to my script: 
+Before launching my mapping array this morning, I made the following updates and annotations to my script:
+
+#### mapping.sh (updated and annotated)
+
 ```
 #!/bin/bash
 #SBATCH --job-name=bwa_map_array
@@ -913,6 +932,8 @@ Cons:
 ...the drawbacks are very small compared to paying thousands of dollars to store terrabytes of sequence data. So, that shall be my next step. The plan is to delete the sam files and re-write them as CRAM files. 
 
 Here's my new script for `sam_to_cram.sh`
+
+#### sam_to_cram.sh
 
 ```
 #!/bin/bash
@@ -1198,6 +1219,9 @@ Here are some links for using picard that helped me with this script:
 * https://broadinstitute.github.io/picard/
 
 dedup.sh: 
+
+#### dedup.sh
+
 ```
 #!/bin/bash
 #SBATCH --job-name=dedup
@@ -1290,5 +1314,360 @@ Given the array's successful run, I will launch the whole thing. The current cra
 
 
 Running as of 11:25 am. Will check back in. 
+
+------
+
+------
+<div id='id-section26'/> 
+
+### Entry 26: 2026-06-22
+
+Man, I've been dragging my feet today. 69/70 of my files ran. Before I proceed to variant calling, I need to get all of my samples ready because the software relies on all files being present.
+
+script for a loop to check where B1R2-22C-D10-E1 fell off: 
+
+```
+
+# Initialize counters
+missing_count=0
+complete_count=0
+
+echo "=== CHECKING mapping STATUS ==="
+
+while IFS= read -r sample || [ -n "$sample" ]; do
+    # Skip empty lines if there are any
+    [ -z "$sample" ] && continue
+    
+    EXPECTED_FILE="/gpfs2/scratch/edombro1/aus_mussels/data/dedup/${sample}_dedup.cram"
+    
+    if [ ! -f "$EXPECTED_FILE" ]; then
+        echo "❌ MISSING: ${sample}"
+        ((missing_count++))
+    else
+        ((complete_count++))
+    fi
+done < "/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+
+echo "-------------------------------------"
+echo "✅ Complete: ${complete_count} / 70"
+echo "❌ Missing:  ${missing_count} / 70"
+=== CHECKING DEDUPLICATION STATUS ===
+❌ MISSING: B1R2-22C-D10-E1
+-------------------------------------
+✅ Complete: 69 / 70
+❌ Missing:  1 / 70
+
+```
+
+So, my next step is to track down this sample. It was turned into a .cram file but not a .crai file. Here is my old loop with edits to fix this: 
+
+
+request interactive job in tmux:
+
+```
+srun --partition=general --nodes=1 --ntasks=1 --cpus-per-task=4 --mem=24G --time=04:00:00 --pty /bin/bash
+```
+
+Modified loop without cycling through all files:
+```
+
+module load gcc/13.3.0-xp3epyt samtools/1.19.2-pfmpoam
+cd /gpfs2/scratch/edombro1/aus_mussels/data/cram
+
+REF="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+
+for cramfile in B1R2-22C-D10-E1.cram; do
+    echo "----------------------------------------"
+    echo "Fixing and coordinate-sorting: ${cramfile}"
+    echo "----------------------------------------"
+
+    # 1. Sort the unsorted CRAM into a temporary clean file
+    samtools sort -@ 4 -O CRAM --reference "$REF" -o "sorted_${cramfile}" "${cramfile}"
+
+    # 2. Build a real genomic index for it
+    samtools index "sorted_${cramfile}"
+
+    # 3. Double check that the new index is a real file (larger than 10KB)
+    if [ -f "sorted_${cramfile}.crai" ] && [ $(stat -c%s "sorted_${cramfile}.crai") -gt 10000 ]; then
+        echo "Success! Replacing old file with sorted data and index."
+        mv "sorted_${cramfile}" "${cramfile}"
+        mv "sorted_${cramfile}.crai" "${cramfile}.crai"
+    else
+        echo "ERROR fixing ${cramfile}. Leaving original intact."
+        rm -f "sorted_${cramfile}" "sorted_${cramfile}.crai"
+    fi
+done
+
+```
+
+------
+
+------
+<div id='id-section27'/> 
+
+### Entry 27: 2026-06-23
+
+I came back this morning to check in on my scripts. Bad news, the original cram file ran into an issue, so this did not run. All good! Here's the output from my run yesterday: 
+```
+for cramfile in B1R2-22C-D10-E1.cram; do
+    echo "----------------------------------------"
+    echo "Fixing and coordinate-sorting: ${cramfile}"
+    echo "----------------------------------------"
+
+    # 1. Sort the unsorted CRAM into a temporary clean file
+    samtools sort -@ 4 -O CRAM --reference "$REF" -o "sorted_${cramfile}" "${cramfile}"
+
+    # 2. Build a real genomic index for it
+    samtools index "sorted_${cramfile}"
+
+    # 3. Double check that the new index is a real file (larger than 10KB)
+    if [ -f "sorted_${cramfile}.crai" ] && [ $(stat -c%s "sorted_${cramfile}.crai") -gt 10000 ]; then
+        echo "Success! Replacing old file with sorted data and index."
+        mv "sorted_${cramfile}" "${cramfile}"
+        mv "sorted_${cramfile}.crai" "${cramfile}.crai"
+    else
+        echo "ERROR fixing ${cramfile}. Leaving original intact."
+        rm -f "sorted_${cramfile}" "sorted_${cramfile}.crai"
+    fi
+done
+----------------------------------------
+Fixing and coordinate-sorting: B1R2-22C-D10-E1.cram
+----------------------------------------
+samtools sort: truncated file. Aborting
+[E::hts_open_format] Failed to open file "sorted_B1R2-22C-D10-E1.cram" : No such file or directory
+samtools index: failed to open "sorted_B1R2-22C-D10-E1.cram": No such file or directory
+ERROR fixing B1R2-22C-D10-E1.cram. Leaving original intact.
+[edombro1@node305 cram]$ [2026-06-22T21:36:33.021] error: *** STEP 4466596.0 ON node305 CANCELLED AT 2026-06-22T21:36:33 DUE TO TIME LIMIT ***
+srun: Job step aborted: Waiting up to 302 seconds for job step to finish.
+srun: error: node305: task 0: Killed
+```
+
+So, here's the game plan: 
+* Remake the .cram file
+* index the .cram file
+* deduplicate the .cram file
+
+From there, all samples should be ready to move on to the next stage of getting turned into a bcf file. 
+
+Alright, so first I will have to request some wall time for this process. From what I remember, sam_to_cram.sh had to be modified for a 12 hour time limit. Next, cram to crai needed about 4 hours. And last, deduplication needed 10 hours. For all three of these processes, I will allocate around 26 hours...hopefully that will be more than enough. 
+
+This is also great because it gives me the chance to actually assimilate all the things I've learned so far and optimize the process for if/when I work with this kind of data again. 
+
+Here's my 'sam_cram_crai_dedup.sh' script:
+
+#### sam_cram_crai_dedup.sh
+
+```
+#!/bin/bash
+#SBATCH --job-name=sam_cram_crai_dedup
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --time=26:00:00
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs/dedup_%a.out
+
+# This is a script to compress and remove pcr duplicates from a sam script. 
+# Input files: .sam
+# Output files: . cram, .crai, and _dedup.cram
+
+# 1. LOAD REQUIRED MODULES - dependency plus sam tools and 
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19.2-pfmpoam
+module load picard/3.1.1-otrgwkh
+
+# 2. DEFINE FILE PATHS - reference genome, cram files, error log files, and sample names
+REF_GENOME="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+SAM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/mapped"
+DEDUP_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/dedup"
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+
+# 3. FILE NAMES - use task name and sample to name files
+SAMPLE_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${SAMPLE_LIST}")
+
+INPUT_SAM="${SAM_DIR}/${SAMPLE_NAME}.sam"
+TEMP_SORTED_BAM="${DEDUP_DIR}/${SAMPLE_NAME}_temp_sorted.bam"
+DEDUP_CRAM="${DEDUP_DIR}/${SAMPLE_NAME}_dedup.cram"
+METRICS_FILE="${DEDUP_DIR}/logs/${SAMPLE_NAME}_metrics.txt"
+
+# 4. Sort .sam file
+# Picard cannot run on the unsorted sam
+samtools sort -@ 4 -O BAM -o "${TEMP_SORTED_BAM}" "${INPUT_SAM}"
+
+# 5. MARK AND REMOVE DUPLICATES - use java syntax and populate file names to mark and remove duplicates
+# .sam -> _temp.bam -> dedup.cram
+
+echo "Starting Picard MarkDuplicates on: ${SAMPLE_NAME}"
+
+java -Xmx28g -jar $PICARD MarkDuplicates \
+      I=${TEMP_SORTED_BAM} \
+      O=${DEDUP_CRAM} \
+      M=${METRICS_FILE} \
+      REFERENCE_SEQUENCE=${REF_GENOME} \
+      REMOVE_DUPLICATES=true \
+      VALIDATION_STRINGENCY=LENIENT
+
+# 6. RE-INDEX AND CLEAN UP - requires samtools
+if [ $? -eq 0 ] && [ -f "${DEDUP_CRAM}" ]; then
+    echo "Picard finished successfully. Generating new matching .crai index..."
+    
+    # Build the brand-new index file
+    samtools index "${DEDUP_CRAM}"
+
+    echo "Deduplication and indexing complete for ${SAMPLE_NAME}."
+else
+    echo "ERROR: Picard MarkDuplicates failed or output file is missing!" >&2
+    exit 1
+fi
+
+# 7. REMOVE TEMPORARY AND REDUNDANT FILES
+
+rm -f "${TEMP_SORTED_BAM}"
+
+if [ -f "${DEDUP_CRAM}.crai" ] && [ $(stat -c%s "${DEDUP_CRAM}.crai") -gt 10000 ]; then
+    echo "SUCCESS: Deduplicated CRAM and Index verified successfully."
+    echo "Purging raw SAM file to save space..."
+    rm -f "${INPUT_SAM}"
+else
+    echo "CRITICAL ERROR: Index file is missing or too small! Keeping SAM." >&2
+    exit 1
+fi
+```
+
+Alright; now that the script exists, I will go ahead and run it on its one file.
+
+Sanity check for what number in the array this file is: 
+`cat -n unique_samples.txt: 4	B1R2-22C-D10-E1`
+
+So to run this, I will go to scripts and run: 
+`sbatch --array=4 sam_cram_crai_dedup.sh`
+
+Alright, running. Next step: building a bcf tools script.
+
+Here's the versions and dependencies I will need: 
+
+```
+gcc/13.3.0-xp3epyt # dependency
+bcftools/1.19-iq5mwek # most updated version on VACC
+```
+
+Here's the commands: 
+```
+Program: bcftools (Tools for variant calling and manipulating VCFs and BCFs)
+Version: 1.19 (using htslib 1.19.1)
+
+Usage:   bcftools [--version|--version-only] [--help] <command> <argument>
+
+Commands:
+
+ -- Indexing
+    index        index VCF/BCF files
+
+ -- VCF/BCF manipulation
+    annotate     annotate and edit VCF/BCF files
+    concat       concatenate VCF/BCF files from the same set of samples
+    convert      convert VCF/BCF files to different formats and back
+    head         view VCF/BCF file headers
+    isec         intersections of VCF/BCF files
+    merge        merge VCF/BCF files files from non-overlapping sample sets
+    norm         left-align and normalize indels
+    plugin       user-defined plugins
+    query        transform VCF/BCF into user-defined formats
+    reheader     modify VCF/BCF header, change sample names
+    sort         sort VCF/BCF file
+    view         VCF/BCF conversion, view, subset and filter VCF/BCF files
+
+ -- VCF/BCF analysis
+    call         SNP/indel calling
+    consensus    create consensus sequence by applying VCF variants
+    cnv          HMM CNV calling
+    csq          call variation consequences
+    filter       filter VCF/BCF files using fixed thresholds
+    gtcheck      check sample concordance, detect sample swaps and contamination
+    mpileup      multi-way pileup producing genotype likelihoods
+    roh          identify runs of autozygosity (HMM)
+    stats        produce VCF/BCF stats
+
+ -- Plugins (collection of programs for calling, file manipulation & analysis)
+    39 plugins available, run "bcftools plugin -lv" to see a complete list
+
+ Most commands accept VCF, bgzipped VCF, and BCF with the file type detected
+ automatically even when streaming from a pipe. Indexed VCF and BCF will work
+ in all situations. Un-indexed VCF and BCF and streams will work in most but
+ not all situations.
+ ```
+ 
+ It looks like I will be using `mpileup`. For now, I am consulting a preprint from the Pespeni lab to orient myself a bit: https://www.biorxiv.org/content/biorxiv/early/2026/02/17/2026.01.20.700628.full.pdf
+"Evidence of Adaptation in Structural Variants among Wild Populations of the purple sea urchin, Strongylocentrotus purpuratus"
+
+They used mpileup and different "scaffolds," in their reference, which likely correspond to chromosomes. Let's check out my reference genome and see what underlying structure is in there. 
+
+```
+sort -k2,2rn GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai | head -n 30
+
+# column structure: contig name; length in base pairs; starting place in file; line bases; line width
+NC_134838.1	133122103	102	80	81 # 1
+NC_134839.1	115872679	134786334	80	81 # 2
+NC_134840.1	112047329	252107524	80	81 # 3
+NC_134841.1	104860103	365555547	80	81 # 4
+NC_134842.1	102992780	471726504	80	81 # 5
+NC_134843.1	102858672	576006796	80	81 # 6 
+NC_134844.1	98048912	680151304	80	81 # 7
+NC_134845.1	97139405	779425930	80	81 # 8
+NC_134846.1	94721750	877779680	80	81 # 9
+NC_134847.1	91363364	973685555	80	81 # 10
+NC_134848.1	86550376	1066191065	80	81 # 11
+NC_134849.1	81349889	1153823424	80	81 # 12
+NC_134850.1	74365144	1236190290	80	81 # 13
+NC_134851.1	73464853	1311485102	80	81 # 14
+NW_027467982.1	267333	1385868401	80	81 # huge drop off in size past the 14th chromosome
+NW_027467983.1	245216	1386139211	80	81
+NW_027467984.1	225351	1386387628	80	81
+NW_027467985.1	219641	1386615931	80	81
+NW_027467986.1	218316	1386838453	80	81
+NW_027467987.1	195018	1387059633	80	81
+NW_027467988.1	186199	1387257224	80	81
+NW_027467989.1	182790	1387445886	80	81
+NW_027467990.1	171464	1387631096	80	81
+NW_027467991.1	164758	1387804839	80	81
+NW_027467992.1	153732	1387971792	80	81
+NW_027467993.1	136734	1388127581	80	81
+NW_027467994.1	131488	1388266160	80	81
+NW_027467995.1	131459	1388399427	80	81
+NW_027467996.1	128680	1388532665	80	81
+NW_027467997.1	125125	1388663089	80	81
+```
+
+It looks like 98% of the assembly is on the 14 main scaffolds. I ran these lines of code to create a new .txt document with the chromosome names:
+
+`# Extract only the names of the top 14 largest scaffolds into a list
+sort -k2,2rn GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai | head -n 14 | cut -f1 > primary_chromosomes.txt` 
+It is located in my reference folder. 
+
+I was poking around in Csenge's directory and found a really nicely formatted multiqc file. I want this type of visualization. Here is a link to the directory, and here is the `multiqc.sh` script I will run: 
+
+#### multiqc.sh
+
+```
+#!/bin/bash
+#SBATCH --job-name=multiqc
+#SBATCH --output=multiqc_%j.out
+#SBATCH --error=multiqc_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=4G
+#SBATCH --time=00:20:00
+#SBATCH --partition=short
+
+# script to visualize all fastq files at the same time
+
+module load gcc/13.3.0-xp3epyt
+module load py-multiqc/1.15-fmpaaj7
+
+cd ~/scratch/aus_mussels/data/trimmed
+multiqc .
+```
+
 
 ------
