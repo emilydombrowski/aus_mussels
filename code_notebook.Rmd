@@ -259,7 +259,8 @@ So, for my next steps I need to do the following:
 ### Entry 13: 2026-06-01
 Today, I am going to deploy some scripts for fastp and fastq. Here is the code I used to make my parameter file: 
 First, I cd'd to the trimmed folder. I pasted this code: 
-```
+
+```{bash, eval = FALSE}
 # Clear out any old tracking files
 > raw_list.txt
 
@@ -280,6 +281,7 @@ rm raw_list.txt
 # Display your finalized list with line numbers to verify
 cat -n unique_samples.txt
 ```
+
 The code output a list with 70 files. Success! For now, seeing all the files just with their sequences, I do realize what a mess I made of naming them...thankfully, now that there is a list, I can go ahead and make a metadata with better names. Which is frustrating, but it is alright. 
 
 Next, I am making the following script into my trimmed directory: trim_array.sh
@@ -580,7 +582,7 @@ Commands:
   
 Seems pretty straight forward?
 
-#### mapping.sh
+ #### mapping.sh
 
 ```
 #!/bin/bash
@@ -1644,11 +1646,15 @@ It looks like 98% of the assembly is on the 14 main scaffolds. I ran these lines
 sort -k2,2rn GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai | head -n 14 | cut -f1 > primary_chromosomes.txt` 
 It is located in my reference folder. 
 
-I was poking around in Csenge's directory and found a really nicely formatted multiqc file. I want this type of visualization. Here is a link to the directory, and here is the `multiqc.sh` script I will run: 
+I was poking around in Csenge's directory and found a really nicely formatted multiqc file. I want this type of visualization. Here is a link to the github
+
+https://github.com/PespeniLab/urchin_local_adapt_WGS/blob/main/From_raw_reads_to_SNPs.md
+
+, and here is the `multiqc.sh` script I will run: 
 
 #### multiqc.sh
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=multiqc
 #SBATCH --output=multiqc_%j.out
@@ -1668,6 +1674,272 @@ module load py-multiqc/1.15-fmpaaj7
 cd ~/scratch/aus_mussels/data/trimmed
 multiqc .
 ```
+
+------
+
+------
+<div id='id-section28'/> 
+
+### Entry 28: 2026-06-24
+
+In the style of the Pespeni lab's 2020 paper, I will be using bcf tool's mpileup command to get to the next stage. In Brennan et al. (2020) and a recent pre-print out of the Pespeni and Nunez labs, bcftools mpileup command is used on different "scaffolds," of the urchin genome (synonomous with "chromosomes"). In this case, I do have access to actual chromosomes level data from the mussels. I will start by doing this step and generating some figures and then see about getting advice from there...
+
+#### bcf_mpileup.sh
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=bcf_mpileup
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=36G
+#SBATCH --time=24:00:00
+#SBATCH --array=1-14
+#SBATCH --output=~/scratch/edombro1/aus_mussels/data/bcf/logs/call_%a.out
+
+# this is a script that will take deduplicated .cram files and put them into a bcf file
+# inputs: {sample}_dedup.cram files; .txt file with chromosome names; .txt file with .cram names
+# outputs: bcf file (bianary variant call file)
+
+# the size of my data set (70 samples with 70x coverage) means that it will be easier to parallelize this and break it up into distinct chromosomes
+
+# 1. LOAD MODULES - dependency + bcftools
+module load gcc/13.3.0-xp3epyt
+module load bcftools/1.19-w67pmsz
+
+# 2. FILE PATHS - reference, variant directory (where outputs from this script will go), list of chromosomes, and txt file with cram names
+REF="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+VAR_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/variants"
+CHROM_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/reference/primary_chromosomes.txt"
+CRAM_LIST="${VAR_DIR}/all_dedup_crams.txt"
+
+# 3. IDENTIFY THIS TASK'S CHROMOSOME
+CHROM_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${CHROM_LIST}")
+OUTPUT_BCF="${VAR_DIR}/split_bcfs/${CHROM_NAME}_raw.bcf"
+
+echo "Task ID ${SLURM_ARRAY_TASK_ID}: Initiating joint variant calling on ${CHROM_NAME}"
+
+# 4. EXPLICIT JOINT CALLING WITH HIGH-DEPTH OVERRIDES
+# -d 10000 ensures all ~4900 maximum layers of experimental depth are safely processed
+# -a FORMAT/AD,FORMAT/DP extracts exact allele depths for downstream delta-p tracking
+bcftools mpileup --threads 2 \
+    -d 10000 \
+    -f "${REF}" \
+    -r "${CHROM_NAME}" \
+    -b "${CRAM_LIST}" \
+    -a FORMAT/AD,FORMAT/DP \
+    -OU | \
+bcftools call --threads 2 \
+    -f GQ,GP \
+    -m \
+    -v \
+    -Ob \
+    -o "${OUTPUT_BCF}"
+
+# 5. RE-INDEX FOR SPEEDY RE-CONCATENATION
+if [ $? -eq 0 ] && [ -f "${OUTPUT_BCF}" ]; then
+    echo "SUCCESS: Completed variant calling for ${CHROM_NAME}. Generating index..."
+    bcftools index "${OUTPUT_BCF}"
+else
+    echo "CRITICAL ERROR: Variant calling failed on chromosome ${CHROM_NAME}!" >&2
+    exit 1
+```
+
+Before launching this script, I made a new directory with the following folder structures: 
+- variants
+  --logs
+  --split_bcfs
+  
+I generated the files with chromosome names and all of the deduplicated cram names as well. See following code for example:
+`ls -d /gpfs2/scratch/edombro1/aus_mussels/data/dedup/*_dedup.cram > all_dedup_crams.txt`
+
+Alright...let's give it a go? It is running. Will check back in tomorrow and see how it is going! Super exciting...
+
+------
+
+------
+<div id='id-section29'/> 
+
+### Entry 29: 2026-06-29
+
+It has been a few days. Essentially, when I checked back on Friday, there had been some issues with my script. Namely, it did not run and it produced a new `~` folder within my scripts. This is not good because it takes me on a round about journey through my directories...I need to solve this within the script and find a way to clean up this extra directory. Additionally, Danny shared his github with me, which should be useful for future things. 
+
+Link to Danny's github: https://github.com/DanielSadler96/IntertidalSeaScapeGenomics/tree/main/Assembly
+
+When I navigate into my new, weird directory and check the logs from my last run, here is the message that I get: 
+
+```bash
+The following module(s) are unknown:
+"bcftools/1.19-w67pmsz"
+
+Please check the spelling or version number. Also try "module spider ..."
+It is also possible your cache file is out-of-date; it may help to try:
+  $ module --ignore_cache load "bcftools/1.19-w67pmsz"
+
+Also make sure that all modulefiles written in TCL start with the string
+#%Module
+```
+
+I'm fairly certain I got the bcftools version from module spider; let's double check.
+
+Here's the version that it gives me for spider: `bcftools/1.19-iq5mwek`
+
+Okay, so my code must have gotten copied over from somewhere else and the version numbers are different. Easy fix! We can work with that. 
+
+So, I deleted the incorrect `~` directory using the open on demand point and click gui...that made me feel much "safer" than the alternative of actually deleting my whole home directory on accident. Let's continue on to fix the file path and make some mods to the script. 
+
+#### bcf_mpileup.sh (updated)
+
+To update, I: 
+* Fixed the file path for the logs folder (I had a folder called "bcf" that doesn't exist in a path...)
+* Increased the amount of time from 24-48 hours; amount of memory from 36-40
+* changed the bcftools version to the proper one...
+* add email to header 
+* after looking at Danny's mpileup code, I added a filter step ` -q 20 \`
+* Ou case was wrong
+* -f has been changed to -a
+
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=bcf_mpileup
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=40G
+#SBATCH --time=48:00:00
+#SBATCH --array=1-14
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/variants/logs/call_%a.out
+#SBATCH --mail-type=ALL
+
+# this is a script that will take deduplicated .cram files and turn them into a bcf file
+# inputs: {sample}_dedup.cram files; .txt file with chromosome names; .txt file with .cram names
+# outputs: bcf file (bianary variant call file)
+
+# the size of my data set (70 samples with 70x coverage) means that it will be easier to parallelize this and break it up into distinct chromosomes
+
+# 1. LOAD MODULES - dependency + bcftools
+module load gcc/13.3.0-xp3epyt
+module load bcftools/1.19-iq5mwek
+
+# 2. FILE PATHS - reference, variant directory (where outputs from this script will go), list of chromosomes, and txt file with cram names
+REF="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+VAR_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/variants"
+CHROM_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/reference/primary_chromosomes.txt"
+CRAM_LIST="${VAR_DIR}/all_dedup_crams.txt"
+
+# 3. IDENTIFY THIS TASK'S CHROMOSOME
+CHROM_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${CHROM_LIST}")
+OUTPUT_BCF="${VAR_DIR}/split_bcfs/${CHROM_NAME}_raw.bcf"
+
+echo "Task ID ${SLURM_ARRAY_TASK_ID}: Initiating joint variant calling on ${CHROM_NAME}"
+
+# 4. EXPLICIT JOINT CALLING WITH HIGH-DEPTH OVERRIDES
+# -d 10000 ensures all ~4900 maximum layers of experimental depth are safely processed
+# -a FORMAT/AD,FORMAT/DP extracts exact allele depths for downstream delta-p tracking
+bcftools mpileup --threads 2 \
+    -d 10000 \
+    -q 20 \
+    -f "${REF}" \
+    -r "${CHROM_NAME}" \
+    -b "${CRAM_LIST}" \
+    -a FORMAT/AD,FORMAT/DP \
+    -Ou | \
+bcftools call --threads 2 \
+    -a GQ,GP \
+    -m \
+    -v \
+    -Ob \
+    -o "${OUTPUT_BCF}"
+
+# 5. RE-INDEX FOR SPEEDY RE-CONCATENATION
+if [ $? -eq 0 ] && [ -f "${OUTPUT_BCF}" ]; then
+    echo "SUCCESS: Completed variant calling for ${CHROM_NAME}. Generating index..."
+    bcftools index "${OUTPUT_BCF}"
+else
+    echo "CRITICAL ERROR: Variant calling failed on chromosome ${CHROM_NAME}!" >&2
+    exit 1
+fi
+```
+
+I added a filtering step to keep the standards pretty high...
+
+Alright, let's deploy? I don't see any reason why not. (I ran into some errors, but fixed them)
+
+While that runs, I am going to make some notes for how to conver the bcf/vcf into figures. Additionally, I should do a check of my files and move some back over to netfiles for safe keeping. As far as figures go: 
+
+* PCA
+* Avergage coverage accross samples
+* proportion correctly mapped onto chromosomes
+* mapped reads/total reads
+* PCA of average coverage (will need to weight observations before actually running this)
+* site frequency spectra
+* Fst
+* Filter by MAF
+* What kind of SNPs? (exons, introns, etc.)
+
+I found this website linked in Danny's github: https://speciationgenomics.github.io/pca/
+
+The tutorials seem pretty promising. 
+
+First, to go from vcf -> pca, it seems like some data transformations need to happen to remove any bias formed from linkage. The website above (and Danny) used the program plink to "prune," the data; then, eigenvectors and eigen values are produced. I always forget the difference between them, so I will summarize below: (information from Abdi and Williams, "Principal component analysis," 2010)
+* Eigenvector: vector that reduces the complexity of the data through scaling, stretching, or compressing; length may be changed by transformations, but not the direction. (I think of this as the fixed axes of the PCA...what allows PCA to truly visualize complexity within the cloud of data points.)
+* Eigenvalue: value associated with vector that reduces complexity of the data
+
+Alright, so plink will be used to generate two data frames with eigenvalues and variables. From there, a PCA can be made. 
+
+For now, I will make a meta data file that has the unique sample name and number of individuals in the sample.
+
+
+------
+
+------
+<div id='id-section30'/> 
+
+### Entry 29: 2026-06-30
+
+Morning check in...my code is still running from yesterday (it is at about 22 hours...I'm glad that I bumped up the time for the batch job!) Oof, I'm cutting it pretty close to my PCA by the end of the month goal. Thankfully, I think I have a pretty solid foundation for understanding the next steps, so let's get into the proposed code now. 
+
+I made my metadata file this morning with the samples and pool amounts. Maybe metadata is a misleading name because it is just pooled? However, I think I have lot's of documentation for everything, so it should be alright. 
+
+This code is adapted from Danny's github and the website from up above. 
+
+#### plink prune script
+
+For citing plink: 
+PLINK v1.9.0-b.7.7 64-bit (22 Oct 2024)            cog-genomics.org/plink/1.9/
+(C) 2005-2024 Shaun Purcell, Christopher Chang   GNU General Public License v3
+
+```bash
+# Modify name of file before going through with this
+VCF=/gpfs2/scratch/edombro1/aus_mussels/data/variants
+
+module load plink/1.9b7.7
+
+plink --vcf $VCF --make-bed --allow-extra-chr --out mussel_plink_filt
+
+###filter MAF 0.05 prune LD 0.8
+
+plink --bfile mussel_plink_filt \
+  --indep-pairwise 50 5 0.2 \
+  --allow-extra-chr \
+  --out mussel_plink_filt_pruned
+
+
+###generate pca
+plink --bfile mussel_plink_filt --mind --allow-extra-chr  --extract  mussel_plink_filt_pruned.prune.in --pca 10  --out mussel_plink_filt_PCA
+
+```
+
+--make-bed : makes new bianary file
+--allow-extra-chr ['0']   : "Permit unrecognized chromosome codes." "allow additional chromosomes beyond the human chromosome set. This is necessary as otherwise plink expects chromosomes 1-22 and the human X chromosome." 
+--out : output file prefix
+--bfile : specify prefix for output files
+--indep-pairwise: "<window size>['kb'] <step size (variant ct)> <r^2 threshold>"
+
+What I am wondering here is how to adequaately pick the amount to consider for linkage disequilibrium. Here is a quote from a Bierne et al. (2003) paper about linkage disequilibrium in hybrid mussels: 
+"linkage disequilibria appear close to their maximum possible values, indicating a strong genetic barrier within all transition zones." 
+Therefore, linkage can be an important factor when looking at *specifically* hybrid mussels; additionally, we sampled these hybrids in an area that is the beginning of the hybrid zone in Victoria. I wonder if this will produce inflated linkage compared to the whole hybrid zone? I will be sure to write this down to think about in the context of the whole system because I think it is interesting. 
 
 
 ------
