@@ -2248,7 +2248,6 @@ fi
 ```
 
 
-echo "Computing parallel coverage for: ${sample}"
-        samtools coverage "${CRAM_DIR}/${sample}_dedup.cram" > "${FINAL_COVERAGE}"
+Alright, I got my github issues reconciled and I can now push from my original account to this repo. Success! Tomorrow, I will hopefully deploy the vcf filtering script, then be on my way to some figures. Yay!
 
 ------

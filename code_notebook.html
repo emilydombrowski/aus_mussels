@@ -2519,17 +2519,479 @@ Variant calling failed on chromosome ${CHROM_NAME}!” &gt;&amp;2 exit 1
 fi ```</td>
 </tr>
 <tr class="even">
+<td>I added a filtering step to keep the standards pretty high…</td>
+</tr>
+<tr class="odd">
 <td>Alright, let’s deploy? I don’t see any reason why not. (I ran into
 some errors, but fixed them)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>While that runs, I am going to make some notes for how to conver the
 bcf/vcf into figures. Additionally, I should do a check of my files and
 move some back over to netfiles for safe keeping. As far as figures
 go:</td>
 </tr>
+<tr class="odd">
+<td>* PCA * Average coverage accross samples * proportion correctly
+mapped onto chromosomes * mapped reads/total reads * PCA of average
+coverage (will need to weight observations before actually running this)
+* site frequency spectra * Fst * Filter by MAF * What kind of SNPs?
+(exons, introns, etc.) * PCA per chromosome * volcano plot * proportion
+of m. galloprovincialis genes to planulatus gene x treatment</td>
+</tr>
 <tr class="even">
-<td>* PCA * Avergage coverage accross samples *</td>
+<td>I found this website linked in Danny’s github: <a href="https://speciationgenomics.github.io/pca/" class="uri">https://speciationgenomics.github.io/pca/</a></td>
+</tr>
+<tr class="odd">
+<td>The tutorials seem pretty promising.</td>
+</tr>
+<tr class="even">
+<td>First, to go from vcf -&gt; pca, it seems like some data
+transformations need to happen to remove any bias formed from linkage.
+The website above (and Danny) used the program plink to “prune,” the
+data; then, eigenvectors and eigen values are produced. I always forget
+the difference between them, so I will summarize below: (information
+from Abdi and Williams, “Principal component analysis,” 2010) *
+Eigenvector: vector that reduces the complexity of the data through
+scaling, stretching, or compressing; length may be changed by
+transformations, but not the direction. (I think of this as the fixed
+axes of the PCA…what allows PCA to truly visualize complexity within the
+cloud of data points.) * Eigenvalue: value associated with vector that
+reduces complexity of the data</td>
+</tr>
+<tr class="odd">
+<td>Alright, so plink will be used to generate two data frames with
+eigenvalues and variables. From there, a PCA can be made.</td>
+</tr>
+<tr class="even">
+<td>For now, I will make a meta data file that has the unique sample
+name and number of individuals in the sample.</td>
+</tr>
+</tbody>
+</table>
+<table style="width:10%;">
+<colgroup>
+<col width="9%" />
+</colgroup>
+<tbody>
+<tr class="odd">
+<td></td>
+</tr>
+<tr class="even">
+<td>### Entry 30: 2026-06-30</td>
+</tr>
+<tr class="odd">
+<td>Morning check in…my code is still running from yesterday (it is at
+about 22 hours…I’m glad that I bumped up the time for the batch job!)
+Oof, I’m cutting it pretty close to my PCA by the end of the month goal.
+Thankfully, I think I have a pretty solid foundation for understanding
+the next steps, so let’s get into the proposed code now.</td>
+</tr>
+<tr class="even">
+<td>I made my metadata file this morning with the samples and pool
+amounts. Maybe metadata is a misleading name because it is just pooled?
+However, I think I have lot’s of documentation for everything, so it
+should be alright.</td>
+</tr>
+<tr class="odd">
+<td>This code is adapted from Danny’s github and the website from up
+above.</td>
+</tr>
+<tr class="even">
+<td>#### plink prune script</td>
+</tr>
+<tr class="odd">
+<td>For citing plink: PLINK v1.9.0-b.7.7 64-bit (22 Oct 2024)
+cog-genomics.org/plink/1.9/ (C) 2005-2024 Shaun Purcell, Christopher
+Chang GNU General Public License v3</td>
+</tr>
+<tr class="even">
+<td>```bash # Modify name of file before going through with this
+VCF=/gpfs2/scratch/edombro1/aus_mussels/data/variants</td>
+</tr>
+<tr class="odd">
+<td>module load plink/1.9b7.7</td>
+</tr>
+<tr class="even">
+<td>plink –vcf $VCF –make-bed –allow-extra-chr –out
+mussel_plink_filt</td>
+</tr>
+<tr class="odd">
+<td>###filter MAF 0.05 prune LD 0.8</td>
+</tr>
+<tr class="even">
+<td>plink –bfile mussel_plink_filt<br />
+–indep-pairwise 50 5 0.2<br />
+–allow-extra-chr<br />
+–out mussel_plink_filt_pruned</td>
+</tr>
+<tr class="odd">
+<td>###generate pca plink –bfile mussel_plink_filt –mind
+–allow-extra-chr –extract mussel_plink_filt_pruned.prune.in –pca 10 –out
+mussel_plink_filt_PCA</td>
+</tr>
+<tr class="even">
+<td>```</td>
+</tr>
+<tr class="odd">
+<td>–make-bed : makes new bianary file –allow-extra-chr [‘0’] : “Permit
+unrecognized chromosome codes.” “allow additional chromosomes beyond the
+human chromosome set. This is necessary as otherwise plink expects
+chromosomes 1-22 and the human X chromosome.” –out : output file prefix
+–bfile : specify prefix for output files –indep-pairwise:
+“<window size>[‘kb’] &lt;step size (variant ct)&gt; &lt;r^2
+threshold&gt;”</td>
+</tr>
+<tr class="even">
+<td>What I am wondering here is how to adequaately pick the amount to
+consider for linkage disequilibrium. Here is a quote from a Bierne et
+al. (2003) paper about linkage disequilibrium in hybrid mussels:
+“linkage disequilibria appear close to their maximum possible values,
+indicating a strong genetic barrier within all transition zones.”
+Therefore, linkage can be an important factor when looking at
+<em>specifically</em> hybrid mussels; additionally, we sampled these
+hybrids in an area that is the beginning of the hybrid zone in Victoria.
+I wonder if this will produce inflated linkage compared to the whole
+hybrid zone? I will be sure to write this down to think about in the
+context of the whole system because I think it is interesting.</td>
+</tr>
+</tbody>
+</table>
+<table style="width:10%;">
+<colgroup>
+<col width="9%" />
+</colgroup>
+<tbody>
+<tr class="odd">
+<td></td>
+</tr>
+<tr class="even">
+<td>### Entry 31: 2026-07-01</td>
+</tr>
+<tr class="odd">
+<td>Alright, the VCF code ran and I got access to my old github. Great!
+I have tried to reconnect that but at the moment it is taking longer
+than anticipated, so I will move on.</td>
+</tr>
+<tr class="even">
+<td>Let’s check out the split bcfs:</td>
+</tr>
+<tr class="odd">
+<td>All of the files populated with data, and none look suspiciously
+small. The 14 files correspond with the number of chromosomes within the
+mussels. For the next step, I need to filter these and then pass them
+off to an r package that will let me visualize these samples as a pca.
+Here’s some code I’m working on to filter these samples and get them
+into good shape before that step:</td>
+</tr>
+<tr class="even">
+<td>#### filter_vcf.sh</td>
+</tr>
+<tr class="odd">
+<td>```bash #!/bin/bash #SBATCH –job-name=bcf_filter #SBATCH
+–partition=general #SBATCH –nodes=1 #SBATCH –cpus-per-task=4 #SBATCH
+–mem=40G #SBATCH –time=10:00:00 #SBATCH –array=1-14 #SBATCH
+–output=/gpfs2/scratch/edombro1/aus_mussels/data/variants/logs/call_%a.out
+#SBATCH –mail-type=ALL</td>
+</tr>
+<tr class="even">
+<td># 1. LOAD MODULES - dependency + bcftools module load
+gcc/13.3.0-xp3epyt module load bcftools/1.19-iq5mwek</td>
+</tr>
+<tr class="odd">
+<td># 2. FILE PATHS - reference, variant directory (where outputs from
+this script will go), list of chromosomes, and txt file with cram names
+CHROM_LIST=“/gpfs2/scratch/edombro1/aus_mussels/data/reference/primary_chromosomes.txt”
+VAR_DIR=“/gpfs2/scratch/edombro1/aus_mussels/data/variants”
+SPLIT_BCF=“/gpfs2/scratch/edombro1/aus_mussels/data/variants/split_bcfs”
+OUTPUT_DIR=“${VAR_DIR}/filt_bcfs”</td>
+</tr>
+<tr class="even">
+<td># 3. IDENTIFY THIS TASK’S CHROMOSOME CHROM_NAME=<span class="math inline">\((sed -n &quot;\)</span>{SLURM_ARRAY_TASK_ID}p”
+“<span class="math inline">\({CHROM_LIST}&quot;)
+OUTPUT_FILT_BCF=&quot;\)</span>{OUTPUT_DIR}/${CHROM_NAME}_filt.bcf”</td>
+</tr>
+<tr class="odd">
+<td># 4. STRINGENTLY FILTER THE SNPS FOR DOWNSTREAM ANALYSES # maintain
+biallelic loci with specific coverage requirements to feed into
+poolfstat bcftools view –threads 4 -v snps -m2 -M2 “<span class="math inline">\({SPLIT_BCF}/\)</span>{CHROM_NAME}_raw.bcf” |<br />
+bcftools filter –threads 4<br />
+-e ‘QUAL &lt; 30 || INFO/DP &lt; 2500 || INFO/DP &gt; 8000 ||
+MIN(FORMAT/DP) &lt; 20 || F_MISSING &gt; 0.0’<br />
+-O b -o $“{OUTPUT_FILT_BCF}”</td>
+</tr>
+<tr class="even">
+<td># 5. RE-INDEX if [ -f “<span class="math inline">\({OUTPUT_FILT_BCF}&quot; ] &amp;&amp; [ -s
+&quot;\)</span>{OUTPUT_FILT_BCF}” ]; then echo “SUCCESS: <span class="math inline">\({CHROM_NAME}_filt.bcf generated. Indexing
+now...&quot;
+bcftools index --threads 4 &quot;\)</span>{OUTPUT_FILT_BCF}” echo
+“SUCCESS: Chromosome ${CHROM_NAME} complete and indexed.” else echo
+“CRITICAL ERROR: Filtration pipeline finished but output file is missing
+or empty.” &gt;&amp;2 exit 1 fi ```</td>
+</tr>
+<tr class="odd">
+<td>Here’s some annotation of this code: View: -v/V,
+–types/–exclude-types LIST Select/exclude comma-separated list of
+variant types: snps,indels,mnps,ref,bnd,other [null] -m/M,
+–min-alleles/–max-alleles INT Minimum/maximum number of alleles listed
+in REF and ALT (e.g. -m2 -M2 for biallelic sites)</td>
+</tr>
+<tr class="even">
+<td>-&gt; For subsequent analyses using poolfstat, it is important to
+strip complexity and maintain biallelic sites</td>
+</tr>
+<tr class="odd">
+<td>Filter: -e, –exclude EXPR :Exclude sites for which the expression is
+true -O, –output-type u|b|v|z[0-9] u/b: un/compressed BCF, v/z:
+un/compressed VCF, 0-9: compression level [v]</td>
+</tr>
+<tr class="even">
+<td>To move into poolfstat, which is the software that I will use to
+create pcas with snps, I need to filter out indels etc. and only keep
+snps that match fairly strict criteria. Poolfstat does not deal in
+multiple alleles.</td>
+</tr>
+<tr class="odd">
+<td>I submitted this job at 2:37 pm, so I’ll see if the 10 hours was
+enough…next, I am going to go back and generate some scripts to look at
+coverage accross my samples using samtools etc.</td>
+</tr>
+<tr class="even">
+<td>I initally ran that and ran into an error because my filtering was
+too stringent. So, I am going to do some qc on the cram files to figure
+out my average coverages, mapping rates, etc. before deciding these
+numbers.</td>
+</tr>
+<tr class="odd">
+<td>#### alignment_metrics_qc.sh (GO TO NEXT PARALLELIZED VERSION WITH
+EDITS) This is a script that will parallize the process of two quality
+control steps: 1. getting coverage and depth metrics from cram files,
+and 2. getting mapping proportions from deduplicated crams.</td>
+</tr>
+<tr class="even">
+<td>* timed out at 10 hours; had to re-run with modifications; see
+parallelized script in next day’s entry for better script *</td>
+</tr>
+<tr class="odd">
+<td>…I was too tired, should not have ran this</td>
+</tr>
+<tr class="even">
+<td>```bash #!/bin/bash #SBATCH –job-name=alignment_metrics_qc.sh
+#SBATCH –partition=general #SBATCH –nodes=1 #SBATCH –cpus-per-task=8
+#SBATCH –mem=20G #SBATCH –time=10:00:00 #SBATCH
+–output=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc/logs/qc_metrics_pipeline.out
+#SBATCH –mail-type=ALL</td>
+</tr>
+<tr class="odd">
+<td># inputs: deduplicated cram files; picard metrics files # outputs:
+coverage.txt; mapping summary.txt</td>
+</tr>
+<tr class="even">
+<td># 1. LOAD MODULES - samtools + dependency module load
+gcc/13.3.0-xp3epyt module load samtools/1.19</td>
+</tr>
+<tr class="odd">
+<td># 2. FILE PATHS - samples, deduplicated crams, metric txt logs, qu
+folder, and reference genome
+SAMPLE_LIST=“/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt”
+CRAM_DIR=“/gpfs2/scratch/edombro1/aus_mussels/data/dedup”
+LOGS_DIR=“/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs”
+QC_OUT=“/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc”
+REF=“/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna”</td>
+</tr>
+<tr class="even">
+<td># 1: CALCULATE GENOME-WIDE COVERAGE AND DEPTH USING SAMTOOLS</td>
+</tr>
+<tr class="odd">
+<td>echo “=== Starting Samtools Coverage Computations ===”</td>
+</tr>
+<tr class="even">
+<td>while IFS= read -r sample || [ -n “<span class="math inline">\({sample}&quot; ]; do
+[[ -z &quot;\)</span>{sample}” || “${sample}” == #* ]] &amp;&amp;
+continue</td>
+</tr>
+<tr class="odd">
+<td>CRAM_FILE=“<span class="math inline">\({CRAM_DIR}/\)</span>{sample}_dedup.cram”</td>
+</tr>
+<tr class="even">
+<td># Safeguard: Verify the CRAM file actually exists in gpfs1 if [ ! -f
+“${CRAM_FILE}” ]; then echo “WARNING: CRAM file missing for sample
+${sample} at ${CRAM_FILE}. Skipping…” &gt;&amp;2 continue fi</td>
+</tr>
+<tr class="odd">
+<td>echo “Computing depth profiles for sample: ${sample}”</td>
+</tr>
+<tr class="even">
+<td># Get average coverage, mean depth, and % of genome covered per
+chromosome samtools coverage –reference “<span class="math inline">\({REF}&quot; &quot;\)</span>{CRAM_FILE}” &gt;
+“<span class="math inline">\({QC_OUT}/\)</span>{sample}_coverage.txt”</td>
+</tr>
+<tr class="odd">
+<td>done &lt; “${SAMPLE_LIST}”</td>
+</tr>
+<tr class="even">
+<td>echo “Samtools coverage analysis complete.” echo
+“—————————————————-”</td>
+</tr>
+<tr class="odd">
+<td># 2: EXTRACT MAPPING PROPORTIONS FROM PICARD METRICS</td>
+</tr>
+<tr class="even">
+<td>echo “=== Starting Picard Metrics Extraction ===”</td>
+</tr>
+<tr class="odd">
+<td># create empty .txt file to store metrics file data
+MAPPING_SUMMARY=“${QC_OUT}/mapping_proportions_summary.txt”</td>
+</tr>
+<tr class="even">
+<td># Initialize the header row of our reproducible summary table echo
+-e “Sample_Reads_Reads_Reads_Mapped” &gt; “${MAPPING_SUMMARY}”</td>
+</tr>
+<tr class="odd">
+<td>while IFS= read -r sample || [ -n “<span class="math inline">\({sample}&quot; ]; do
+[[ -z &quot;\)</span>{sample}” || “${sample}” == #* ]] &amp;&amp;
+continue</td>
+</tr>
+<tr class="even">
+<td>PICARD_FILE=“<span class="math inline">\({LOGS_DIR}/\)</span>{sample}_metrics.txt”</td>
+</tr>
+<tr class="odd">
+<td># Safeguard: Verify the Picard metrics file exists if [ ! -f
+“${PICARD_FILE}” ]; then echo “WARNING: Picard metrics file missing for
+sample ${sample} at ${PICARD_FILE}. Skipping…” &gt;&amp;2 continue
+fi</td>
+</tr>
+<tr class="even">
+<td># Grab the data line directly under the “LIBRARY” header block
+metrics_line=<span class="math inline">\((grep -A 1 &quot;LIBRARY&quot;
+&quot;\)</span>{PICARD_FILE}” | tail -n 1)</td>
+</tr>
+<tr class="odd">
+<td># Process line using awk and append to master file echo “<span class="math inline">\({metrics_line}&quot; | awk -v
+s=&quot;\)</span>{sample}” -F’ ’{ unpaired = $2; pairs = $3; unmapped =
+$5;</td>
+</tr>
+<tr class="even">
+<td>total_reads = unpaired + (pairs * 2); mapped_reads = total_reads -
+unmapped; prop_mapped = (total_reads &gt; 0) ? (mapped_reads /
+total_reads) : 0;</td>
+</tr>
+<tr class="odd">
+<td>printf “%s%d%d%d%.4f”, s, total_reads, unmapped, mapped_reads,
+prop_mapped; }’ &gt;&gt; “${MAPPING_SUMMARY}”</td>
+</tr>
+<tr class="even">
+<td>done &lt; “${SAMPLE_LIST}”</td>
+</tr>
+<tr class="odd">
+<td>echo “SUCCESS: Picard metrics extraction complete.” echo “Master
+file generated at: ${MAPPING_SUMMARY}”</td>
+</tr>
+<tr class="even">
+<td>```</td>
+</tr>
+<tr class="odd">
+<td>Okay. I may have to log off for the day because my brain is not
+working at full speed right now…</td>
+</tr>
+</tbody>
+</table>
+<table style="width:10%;">
+<colgroup>
+<col width="9%" />
+</colgroup>
+<tbody>
+<tr class="odd">
+<td></td>
+</tr>
+<tr class="even">
+<td>### Entry 32: 2026-07-02</td>
+</tr>
+<tr class="odd">
+<td>Even with 10 hours, the alignment_metrics_qc.sh script from
+yesterday timed out. I am going to bump the time to 48 hours and
+hopefully it will finish…</td>
+</tr>
+<tr class="even">
+<td>Here are the files that completed:</td>
+</tr>
+<tr class="odd">
+<td><code>Jul 1 16:26 B1R1-14C-D10-E1_coverage.txt Jul  1 17:00 B1R1-D1-E1_coverage.txt Jul  1 17:29 B1R2-14C-D10-E1_coverage.txt Jul  1 17:50 B1R2-22C-D10-E1_coverage.txt Jul  1 18:19 B1R2-D1-E1_coverage.txt Jul  1 18:46 B1R3-14C-D10-E1_coverage.txt Jul  1 19:20 B1R3-B2R1-22-D10-E1_coverage.txt Jul  1 20:00 B1R3-D1-E1_coverage.txt Jul  1 20:33 B1R4-D1-E1_coverage.txt Jul  1 21:06 B1R5-D1-E1_coverage.txt Jul  1 21:20 B2R1-22C-D10-E1_coverage.txt Jul  1 21:55 B2R1-D1-E1_coverage.txt Jul  1 22:20 B2R2-14C-D10-E1_coverage.txt Jul  1 22:48 B2R2-22C-D10-E1_coverage.txt Jul  1 23:21 B2R2-D1-E1_coverage.txt Jul  1 23:43 B2R3-14C-D10-E1_coverage.txt Jul  2 00:01 B2R3-22C-D10-E1_coverage.txt Jul  2 00:31 B2R3-D1-E1_coverage.txt Jul  2 01:03 B2R4-D1-E1_coverage.txt Jul  2 01:39 B2R6-D1-E1_coverage.txt Jul  2 01:56 B3R1-14C-D10-E1_coverage.txt</code></td>
+</tr>
+<tr class="even">
+<td>Here is some code that will parallelize the whole process. It should
+go quicker, and I added a step to check if some files have already been
+ran</td>
+</tr>
+<tr class="odd">
+<td>#### alignment_metrics_qc_array.sh</td>
+</tr>
+<tr class="even">
+<td>```bash #!/bin/bash #SBATCH –job-name=alignment_metrics_qc_array
+#SBATCH –partition=general #SBATCH –nodes=1 #SBATCH –cpus-per-task=1
+#SBATCH –mem=10G #SBATCH –time=08:00:00 #SBATCH –array=1-70 #SBATCH
+–output=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc/logs/array_%A_%a.out
+#SBATCH –mail-type=ALL</td>
+</tr>
+<tr class="odd">
+<td># 1. LOAD MODULES - samtools + dependencies module load
+gcc/13.3.0-xp3epyt module load samtools/1.19</td>
+</tr>
+<tr class="even">
+<td># 2. FILE PATHS - samples, deduplicated crams, qc directory, and
+picard logs directory
+SAMPLE_LIST=“/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt”
+CRAM_DIR=“/gpfs2/scratch/edombro1/aus_mussels/data/dedup”
+QC_OUT=“/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc”
+LOGS_DIR=“/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs”</td>
+</tr>
+<tr class="odd">
+<td># 3. IDENTIFY TARGET SAMPLE PER TASK # use sed -n p to print the
+array task sample=<span class="math inline">\((sed -n
+&quot;\)</span>{SLURM_ARRAY_TASK_ID}p” “${SAMPLE_LIST}”)</td>
+</tr>
+<tr class="even">
+<td># if sample doesn’t exist, error message gets sent to log if [ -z
+“${sample}” ]; then echo “Line ${SLURM_ARRAY_TASK_ID} is empty.
+Exiting.” exit 0 fi</td>
+</tr>
+<tr class="odd">
+<td># .txt file gets inititated in output directory
+FINAL_COVERAGE=“<span class="math inline">\({QC_OUT}/\)</span>{sample}_coverage.txt”
+INDIVIDUAL_MAPPING=“<span class="math inline">\({QC_OUT}/\)</span>{sample}_map_stats.tmp”</td>
+</tr>
+<tr class="even">
+<td># use coverage command in samtools to get mapping statistics for
+each sample # CHECKPOINT: If a file exists from the earlier run, skip
+the heavy computation if [ -f “<span class="math inline">\({FINAL_COVERAGE}&quot; ] &amp;&amp; [ -s
+&quot;\)</span>{FINAL_COVERAGE}” ]; then echo “Checkpoint verified for
+<span class="math inline">\({sample}. Skipping samtools
+coverage...&quot;
+else
+if [ -f &quot;\)</span>{CRAM_DIR}/${sample}_dedup.cram” ]; then echo
+“Computing parallel coverage for: <span class="math inline">\({sample}&quot;
+samtools coverage &quot;\)</span>{CRAM_DIR}/<span class="math inline">\({sample}_dedup.cram&quot; &gt;
+&quot;\)</span>{FINAL_COVERAGE}” else echo “ERROR: CRAM missing for
+${sample}” &gt;&amp;2 fi fi</td>
+</tr>
+<tr class="odd">
+<td># 4. EXTRACT PICARD STATS - uses grep and awk to extract coverage
+data PICARD_FILE=“<span class="math inline">\({LOGS_DIR}/\)</span>{sample}_metrics.txt” if [ -f
+“<span class="math inline">\({PICARD_FILE}&quot; ]; then
+metrics_line=\)</span>(grep -A 1”LIBRARY” “<span class="math inline">\({PICARD_FILE}&quot; | tail -n 1)
+echo &quot;\)</span>{metrics_line}” | awk -v s=“${sample}” -F’ ’{
+unpaired = $2; pairs = $3; unmapped = <span class="math inline">\(5;
+total = unpaired + (pairs * 2);
+mapped = total - unmapped;
+prop = (total &gt; 0) ? (mapped / total) : 0;
+printf &quot;%s\t%d\t%d\t%d\t%.4f\n&quot;, s, total, unmapped, mapped,
+prop;
+}&#39; &gt; &quot;\)</span>{INDIVIDUAL_MAPPING}” fi ```</td>
+</tr>
+<tr class="even">
+<td>echo “Computing parallel coverage for: <span class="math inline">\({sample}&quot;
+samtools coverage &quot;\)</span>{CRAM_DIR}/<span class="math inline">\({sample}_dedup.cram&quot; &gt;
+&quot;\)</span>{FINAL_COVERAGE}”</td>
 </tr>
 </tbody>
 </table>
