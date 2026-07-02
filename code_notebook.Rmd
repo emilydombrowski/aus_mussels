@@ -1869,7 +1869,7 @@ Alright, let's deploy? I don't see any reason why not. (I ran into some errors, 
 While that runs, I am going to make some notes for how to conver the bcf/vcf into figures. Additionally, I should do a check of my files and move some back over to netfiles for safe keeping. As far as figures go: 
 
 * PCA
-* Avergage coverage accross samples
+* Average coverage accross samples
 * proportion correctly mapped onto chromosomes
 * mapped reads/total reads
 * PCA of average coverage (will need to weight observations before actually running this)
@@ -1877,6 +1877,9 @@ While that runs, I am going to make some notes for how to conver the bcf/vcf int
 * Fst
 * Filter by MAF
 * What kind of SNPs? (exons, introns, etc.)
+* PCA per chromosome
+* volcano plot
+* proportion of m. galloprovincialis genes to planulatus gene x treatment
 
 I found this website linked in Danny's github: https://speciationgenomics.github.io/pca/
 
@@ -1896,7 +1899,7 @@ For now, I will make a meta data file that has the unique sample name and number
 ------
 <div id='id-section30'/> 
 
-### Entry 29: 2026-06-30
+### Entry 30: 2026-06-30
 
 Morning check in...my code is still running from yesterday (it is at about 22 hours...I'm glad that I bumped up the time for the batch job!) Oof, I'm cutting it pretty close to my PCA by the end of the month goal. Thankfully, I think I have a pretty solid foundation for understanding the next steps, so let's get into the proposed code now. 
 
@@ -1941,5 +1944,311 @@ What I am wondering here is how to adequaately pick the amount to consider for l
 "linkage disequilibria appear close to their maximum possible values, indicating a strong genetic barrier within all transition zones." 
 Therefore, linkage can be an important factor when looking at *specifically* hybrid mussels; additionally, we sampled these hybrids in an area that is the beginning of the hybrid zone in Victoria. I wonder if this will produce inflated linkage compared to the whole hybrid zone? I will be sure to write this down to think about in the context of the whole system because I think it is interesting. 
 
+
+------
+
+
+------
+<div id='id-section31'/> 
+
+### Entry 31: 2026-07-01
+
+Alright, the VCF code ran and I got access to my old github. Great! I have tried to reconnect that but at the moment it is taking longer than anticipated, so I will move on.
+
+Let's check out the split bcfs: 
+```
+ls -lhS *.bcf
+16G Jul  1 06:01 NC_134838.1_raw.bcf
+15G Jun 30 23:00 NC_134842.1_raw.bcf
+14G Jun 30 22:02 NC_134845.1_raw.bcf
+14G Jul  1 03:26 NC_134843.1_raw.bcf
+14G Jul  1 06:07 NC_134840.1_raw.bcf
+14G Jun 30 22:02 NC_134844.1_raw.bcf
+13G Jul  1 02:28 NC_134839.1_raw.bcf
+13G Jun 30 18:41 NC_134848.1_raw.bcf
+13G Jul  1 06:12 NC_134841.1_raw.bcf
+13G Jun 30 20:42 NC_134847.1_raw.bcf
+12G Jun 30 17:16 NC_134849.1_raw.bcf
+12G Jul  1 00:00 NC_134846.1_raw.bcf
+11G Jun 30 12:48 NC_134851.1_raw.bcf
+9.9G Jun 30 14:46 NC_134850.1_raw.bcf
+[edombro1@vacc-login4 split_bcfs]$ du -sh .
+178G	.
+```
+
+All of the files populated with data, and none look suspiciously small. The 14 files correspond with the number of chromosomes within the mussels. For the next step, I need to filter these and then pass them off to an r package that will let me visualize these samples as a pca. Here's some code I'm working on to filter these samples and get them into good shape before that step: 
+
+#### filter_vcf.sh
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=bcf_filter
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=40G
+#SBATCH --time=10:00:00
+#SBATCH --array=1-14
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/variants/logs/call_%a.out
+#SBATCH --mail-type=ALL
+
+# 1. LOAD MODULES - dependency + bcftools
+module load gcc/13.3.0-xp3epyt
+module load bcftools/1.19-iq5mwek
+
+# 2. FILE PATHS - reference, variant directory (where outputs from this script will go), list of chromosomes, and txt file with cram names
+CHROM_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/reference/primary_chromosomes.txt"
+VAR_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/variants"
+SPLIT_BCF="/gpfs2/scratch/edombro1/aus_mussels/data/variants/split_bcfs"
+OUTPUT_DIR="${VAR_DIR}/filt_bcfs"
+
+# 3. IDENTIFY THIS TASK'S CHROMOSOME
+CHROM_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${CHROM_LIST}")
+OUTPUT_FILT_BCF="${OUTPUT_DIR}/${CHROM_NAME}_filt.bcf"
+
+# 4. STRINGENTLY FILTER THE SNPS FOR DOWNSTREAM ANALYSES
+# maintain biallelic loci with specific coverage requirements to feed into poolfstat
+bcftools view --threads 4 -v snps -m2 -M2 "${SPLIT_BCF}/${CHROM_NAME}_raw.bcf" | \
+bcftools filter --threads 4 \
+  -e 'QUAL < 30 || INFO/DP < 2500 || INFO/DP > 8000 || MIN(FORMAT/DP) < 20 || F_MISSING > 0.0' \
+  -O b -o $"{OUTPUT_FILT_BCF}"
+
+# 5. RE-INDEX
+if [ -f "${OUTPUT_FILT_BCF}" ] && [ -s "${OUTPUT_FILT_BCF}" ]; then
+    echo "SUCCESS: ${CHROM_NAME}_filt.bcf generated. Indexing now..."
+    bcftools index --threads 4 "${OUTPUT_FILT_BCF}"
+    echo "SUCCESS: Chromosome ${CHROM_NAME} complete and indexed."
+else
+    echo "CRITICAL ERROR: Filtration pipeline finished but output file is missing or empty." >&2
+    exit 1
+fi
+```
+
+Here's some annotation of this code: 
+View: 
+-v/V, --types/--exclude-types LIST     Select/exclude comma-separated list of variant types: snps,indels,mnps,ref,bnd,other [null]
+-m/M, --min-alleles/--max-alleles INT  Minimum/maximum number of alleles listed in REF and ALT (e.g. -m2 -M2 for biallelic sites)
+
+-> For subsequent analyses using poolfstat, it is important to strip complexity and maintain biallelic sites
+
+Filter: 
+-e, --exclude EXPR :Exclude sites for which the expression is true
+-O, --output-type u|b|v|z[0-9]    u/b: un/compressed BCF, v/z: un/compressed VCF, 0-9: compression level [v]
+
+To move into poolfstat, which is the software that I will use to create pcas with snps, I need to filter out indels etc. and only keep snps that match fairly strict criteria. Poolfstat does not deal in multiple alleles.
+
+I submitted this job at 2:37 pm, so I'll see if the 10 hours was enough...next, I am going to go back and generate some scripts to look at coverage accross my samples using samtools etc. 
+
+I initally ran that and ran into an error because my filtering was too stringent. So, I am going to do some qc on the cram files to figure out my average coverages, mapping rates, etc. before deciding these numbers. 
+
+#### alignment_metrics_qc.sh (GO TO NEXT PARALLELIZED VERSION WITH EDITS)
+This is a script that will parallize the process of two quality control steps: 1. getting coverage and depth metrics from cram files, and 2. getting mapping proportions from deduplicated crams. 
+
+* timed out at 10 hours; had to re-run with modifications; see parallelized script in next day's entry for better script *
+
+...I was too tired, should not have ran this
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=alignment_metrics_qc.sh
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=20G
+#SBATCH --time=10:00:00
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc/logs/qc_metrics_pipeline.out
+#SBATCH --mail-type=ALL
+
+# inputs: deduplicated cram files; picard metrics files
+# outputs: coverage.txt; mapping summary.txt
+
+# 1. LOAD MODULES - samtools + dependency
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19
+
+# 2. FILE PATHS - samples, deduplicated crams, metric txt logs, qu folder, and reference genome
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+CRAM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/dedup" 
+LOGS_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs"
+QC_OUT="/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc"
+REF="/gpfs2/scratch/edombro1/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+
+# 1: CALCULATE GENOME-WIDE COVERAGE AND DEPTH USING SAMTOOLS
+
+echo "=== Starting Samtools Coverage Computations ==="
+
+while IFS= read -r sample || [ -n "${sample}" ]; do
+    [[ -z "${sample}" || "${sample}" == \#* ]] && continue
+
+    CRAM_FILE="${CRAM_DIR}/${sample}_dedup.cram"
+
+    # Safeguard: Verify the CRAM file actually exists in gpfs1
+    if [ ! -f "${CRAM_FILE}" ]; then
+        echo "WARNING: CRAM file missing for sample ${sample} at ${CRAM_FILE}. Skipping..." >&2
+        continue
+    fi
+
+    echo "Computing depth profiles for sample: ${sample}"
+
+    # Get average coverage, mean depth, and % of genome covered per chromosome
+    samtools coverage --reference "${REF}" "${CRAM_FILE}" > "${QC_OUT}/${sample}_coverage.txt"
+
+done < "${SAMPLE_LIST}"
+
+echo "Samtools coverage analysis complete."
+echo "----------------------------------------------------"
+
+# 2: EXTRACT MAPPING PROPORTIONS FROM PICARD METRICS
+
+echo "=== Starting Picard Metrics Extraction ==="
+
+# create empty .txt file to store metrics file data
+MAPPING_SUMMARY="${QC_OUT}/mapping_proportions_summary.txt"
+
+# Initialize the header row of our reproducible summary table
+echo -e "Sample\tTotal_Reads\tUnmapped_Reads\tMapped_Reads\tProportion_Mapped" > "${MAPPING_SUMMARY}"
+
+while IFS= read -r sample || [ -n "${sample}" ]; do
+    [[ -z "${sample}" || "${sample}" == \#* ]] && continue
+
+    PICARD_FILE="${LOGS_DIR}/${sample}_metrics.txt"
+
+    # Safeguard: Verify the Picard metrics file exists
+    if [ ! -f "${PICARD_FILE}" ]; then
+        echo "WARNING: Picard metrics file missing for sample ${sample} at ${PICARD_FILE}. Skipping..." >&2
+        continue
+    fi
+
+    # Grab the data line directly under the "LIBRARY" header block
+    metrics_line=$(grep -A 1 "LIBRARY" "${PICARD_FILE}" | tail -n 1)
+    
+    # Process line using awk and append to master file
+    echo "${metrics_line}" | awk -v s="${sample}" -F'\t' '{
+        unpaired = $2;
+        pairs = $3;
+        unmapped = $5;
+        
+        total_reads = unpaired + (pairs * 2);
+        mapped_reads = total_reads - unmapped;
+        prop_mapped = (total_reads > 0) ? (mapped_reads / total_reads) : 0;
+        
+        printf "%s\t%d\t%d\t%d\t%.4f\n", s, total_reads, unmapped, mapped_reads, prop_mapped;
+    }' >> "${MAPPING_SUMMARY}"
+
+done < "${SAMPLE_LIST}"
+
+echo "SUCCESS: Picard metrics extraction complete."
+echo "Master file generated at: ${MAPPING_SUMMARY}"
+
+```
+
+Okay. I may have to log off for the day because my brain is not working at full speed right now...
+
+------
+
+------
+<div id='id-section32'/> 
+
+### Entry 32: 2026-07-02
+
+Even with 10 hours, the alignment_metrics_qc.sh script from yesterday timed out. I am going to bump the time to 48 hours and hopefully it will finish...
+
+Here are the files that completed: 
+
+```
+Jul 1 16:26 B1R1-14C-D10-E1_coverage.txt
+Jul  1 17:00 B1R1-D1-E1_coverage.txt
+Jul  1 17:29 B1R2-14C-D10-E1_coverage.txt
+Jul  1 17:50 B1R2-22C-D10-E1_coverage.txt
+Jul  1 18:19 B1R2-D1-E1_coverage.txt
+Jul  1 18:46 B1R3-14C-D10-E1_coverage.txt
+Jul  1 19:20 B1R3-B2R1-22-D10-E1_coverage.txt
+Jul  1 20:00 B1R3-D1-E1_coverage.txt
+Jul  1 20:33 B1R4-D1-E1_coverage.txt
+Jul  1 21:06 B1R5-D1-E1_coverage.txt
+Jul  1 21:20 B2R1-22C-D10-E1_coverage.txt
+Jul  1 21:55 B2R1-D1-E1_coverage.txt
+Jul  1 22:20 B2R2-14C-D10-E1_coverage.txt
+Jul  1 22:48 B2R2-22C-D10-E1_coverage.txt
+Jul  1 23:21 B2R2-D1-E1_coverage.txt
+Jul  1 23:43 B2R3-14C-D10-E1_coverage.txt
+Jul  2 00:01 B2R3-22C-D10-E1_coverage.txt
+Jul  2 00:31 B2R3-D1-E1_coverage.txt
+Jul  2 01:03 B2R4-D1-E1_coverage.txt
+Jul  2 01:39 B2R6-D1-E1_coverage.txt
+Jul  2 01:56 B3R1-14C-D10-E1_coverage.txt
+```
+
+
+Here is some code that will parallelize the whole process. It should go quicker, and I added a step to check if some files have already been ran
+
+#### alignment_metrics_qc_array.sh
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=alignment_metrics_qc_array
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=10G
+#SBATCH --time=08:00:00
+#SBATCH --array=1-70
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc/logs/array_%A_%a.out
+#SBATCH --mail-type=ALL
+
+# 1. LOAD MODULES - samtools + dependencies
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19
+
+# 2. FILE PATHS  - samples, deduplicated crams, qc directory, and picard logs directory
+SAMPLE_LIST="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed/unique_samples.txt"
+CRAM_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/dedup"
+QC_OUT="/gpfs2/scratch/edombro1/aus_mussels/data/dedup/qc"
+LOGS_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/dedup/logs"
+
+# 3. IDENTIFY TARGET SAMPLE PER TASK
+# use sed -n p to print the array task
+sample=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${SAMPLE_LIST}")
+
+# if sample doesn't exist, error message gets sent to log
+if [ -z "${sample}" ]; then
+    echo "Line ${SLURM_ARRAY_TASK_ID} is empty. Exiting."
+    exit 0
+fi
+
+# .txt file gets inititated in output directory
+FINAL_COVERAGE="${QC_OUT}/${sample}_coverage.txt"
+INDIVIDUAL_MAPPING="${QC_OUT}/${sample}_map_stats.tmp"
+
+# use coverage command in samtools to get mapping statistics for each sample
+# CHECKPOINT: If a file exists from the earlier run, skip the heavy computation
+if [ -f "${FINAL_COVERAGE}" ] && [ -s "${FINAL_COVERAGE}" ]; then
+    echo "Checkpoint verified for ${sample}. Skipping samtools coverage..."
+else
+    if [ -f "${CRAM_DIR}/${sample}_dedup.cram" ]; then
+        echo "Computing parallel coverage for: ${sample}"
+        samtools coverage "${CRAM_DIR}/${sample}_dedup.cram" > "${FINAL_COVERAGE}"
+    else
+        echo "ERROR: CRAM missing for ${sample}" >&2
+    fi
+fi
+
+# 4. EXTRACT PICARD STATS - uses grep and awk to extract coverage data
+PICARD_FILE="${LOGS_DIR}/${sample}_metrics.txt"
+if [ -f "${PICARD_FILE}" ]; then
+    metrics_line=$(grep -A 1 "LIBRARY" "${PICARD_FILE}" | tail -n 1)
+    echo "${metrics_line}" | awk -v s="${sample}" -F'\t' '{
+        unpaired = $2; pairs = $3; unmapped = $5;
+        total = unpaired + (pairs * 2);
+        mapped = total - unmapped;
+        prop = (total > 0) ? (mapped / total) : 0;
+        printf "%s\t%d\t%d\t%d\t%.4f\n", s, total, unmapped, mapped, prop;
+    }' > "${INDIVIDUAL_MAPPING}"
+fi
+```
+
+
+echo "Computing parallel coverage for: ${sample}"
+        samtools coverage "${CRAM_DIR}/${sample}_dedup.cram" > "${FINAL_COVERAGE}"
 
 ------
