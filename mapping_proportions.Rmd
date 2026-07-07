@@ -1,0 +1,175 @@
+---
+title: "mapping_proportions"
+author: "Emily Dombrowski"
+date: "2026-07-03"
+output: html_document
+---
+
+This is a script for parsing mapping stats in mussel WGS samples. The purpose of this script is to take quality control stats from the mapping process of fastq files to .sam (or in my case .cram) files and deduplication using Picard.
+Input documents: `mapping_proportions_summary.txt`, 
+Output figures: 
+* Coverage / sample (interactive plotly)
+* 
+```{r}
+
+# Load libraries
+library(tidyverse)
+library(plotly)
+
+# 1. Load the mapping data (tab-separated)
+qc_data <- read_delim("mapping_proportions_summary.txt", delim = "\t")
+
+# Fix the upstream Picard math bug inline
+qc_data <- qc_data %>%
+  mutate(
+    # The original 'Total_Reads' column actually represents the true mapped reads
+    True_Mapped = Total_Reads, 
+    True_Total  = Total_Reads + Unmapped_Reads,
+    
+    # Recalculate everything accurately
+    Proportion_Mapped = True_Mapped / True_Total,
+    Total_Reads       = True_Total,
+    Mapped_Reads      = True_Mapped
+  ) %>%
+  dplyr::select(-True_Mapped, -True_Total)
+
+# View the corrected structure
+head(qc_data)
+glimpse(qc_data)
+
+# 2. Global Summary Statistics
+summary_metrics <- qc_data %>%
+  summarise(
+    total_samples      = n(),
+    mean_total_reads   = mean(Total_Reads),
+    median_total_reads = median(Total_Reads),
+    mean_mapping_prop  = mean(Proportion_Mapped),
+    median_mapping_prop = median(Proportion_Mapped),
+    min_mapping_prop   = min(Proportion_Mapped),
+    max_mapping_prop   = max(Proportion_Mapped)
+  )
+
+print("--- Global Alignment Metrics Summary ---")
+print(summary_metrics)
+
+
+# 3. Identify Outlier Pools (Flagging low mapping or low read counts)
+# Adjust these thresholds based on your specific sequencing depth expectations
+mapping_threshold <- 0.70  # Flag pools where less than 70% of reads mapped
+read_count_threshold <- 5000000  # Flag pools with fewer than 5M total reads
+
+low_mapping_samples <- qc_data %>% 
+  filter(Proportion_Mapped < mapping_threshold)
+
+View(low_mapping_samples)
+
+low_depth_samples <- qc_data %>% 
+  filter(Total_Reads < read_count_threshold)
+
+print(paste("Samples below mapping threshold:", nrow(low_mapping_samples)))
+print(low_mapping_samples)
+
+print(paste("Samples below depth threshold:", nrow(low_depth_samples)))
+print(low_depth_samples)
+
+# 4. Visualization
+
+# Plot A: Distribution of Mapping Proportions
+ggplot(qc_data, aes(x = Proportion_Mapped)) +
+  geom_histogram(binwidth = 0.01, fill = "steelblue", color = "black", alpha = 0.8) +
+  geom_vline(xintercept = mapping_threshold, color = "red", linetype = "dashed", size = 1) +
+  theme_minimal() +
+  labs(
+    title = "Mytilus Pool Mapping Success",
+    subtitle = paste("Red line denotes custom threshold at", mapping_threshold * 100, "%"),
+    x = "Proportion of Reads Mapped",
+    y = "Number of Samples"
+  )
+
+# Plot B: Total Depth vs. Mapping Success
+ggplot(qc_data, aes(x = Total_Reads / 1e6, y = Proportion_Mapped)) +
+  geom_point(color = "darkgreen", size = 3, alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Sequencing Depth vs. Alignment Efficiency",
+    x = "Total Reads (Millions)",
+    y = "Proportion Mapped"
+  )
+```
+
+
+```{r coverage histogram}
+
+# Barplot showing sample vs. proportion mapped
+p <- ggplot(qc_data, aes(x=Sample, y=Proportion_Mapped)) + 
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_blank()) +
+  labs(y = "Mapped reads / total reads",
+       x = "Sample (hover over bar to see individuals)")
+
+ggplotly(p)
+
+# Total reads per sample
+m <- ggplot(qc_data, aes(x=Sample, y=Mapped_Reads)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_blank()) +
+  labs(y = "Mapped reads",
+       x = "Sample")
+
+ggplotly(m)
+
+```
+
+```{r subset by time point and temperature}
+
+qc_subset <- qc_data %>%
+  mutate(
+    Timepoint = case_when(
+      # Looks for strings starting with F or M
+      str_detect(Sample, "^[FM]")       ~ "adult",
+      
+      # Matches exact day tags within the sample ID
+      str_detect(Sample, "-D1-")          ~ "day_1",
+      str_detect(Sample, "-D10-")         ~ "day_10",
+      
+      # The | operator means "OR", catching both Day 19 and Day 20
+      str_detect(Sample, "-D19-|-D20-")   ~ "final_day",
+      
+      # Catch-all safety net just in case a sample ID is misformatted
+      TRUE                                ~ "Unknown" 
+    ),
+    
+    # 2. Extract the Temperature component
+    Temperature = case_when(
+      str_detect(Sample, "-14C-") ~ "14C",
+      str_detect(Sample, "-22C-") ~ "22C",
+      TRUE                        ~ "initial" # Adults and Day 1 baselines land here
+    )
+  )
+
+# two samples with bad naming conventions; let's manually reassign them to the correct category
+# here are the sample names: 
+# C3R3-D20-14-E1
+# B1R3-B2R1-22-D10-E1
+
+qc_subset <- qc_subset %>%
+  mutate(
+    Temperature = case_when(
+      Sample == "C3R3-D20-14-E1" ~ "14C",
+      Sample == "B1R3-B2R1-22-D10-E1" ~ "22C",
+      TRUE ~ Temperature
+                          )
+        )
+
+# Boxplot to visualize the interaction of time and temperature
+box <- ggplot(qc_subset, aes(x = Timepoint, y = Proportion_Mapped, fill = Temperature)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.1), size = 2) +
+  theme_minimal() +
+  labs(x = "Life stage", y = "Mapped reads/unmapped reads")
+
+ggplotly(box)
+
+print(box)
+
+```

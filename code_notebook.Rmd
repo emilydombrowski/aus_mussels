@@ -2251,3 +2251,92 @@ fi
 Alright, I got my github issues reconciled and I can now push from my original account to this repo. Success! Tomorrow, I will hopefully deploy the vcf filtering script, then be on my way to some figures. Yay!
 
 ------
+
+------
+<div id='id-section33'/> 
+
+### Entry 33: 2026-07-03
+
+Alright, my script for metrics finished running; let's check it out. (I did technically get some errors but I got an output file. Let's check it out in R. )
+
+I created `mapping_proportions.Rmd` to check some things out. It looks like 24 samples had pretty low mapping proportions, likely from algal contamination if I had to guess. 
+
+I think it is a lot to take in and assimilate before I launch my bcf filtering script. I will take a walk to think about it. 
+
+Some next steps: 
+* subset coverage by adults and larvae; adults are likely driving the very high mean at the moment
+* think about how algal contamination and experimental set up could have been avoided
+* map algal stuff just to be sure that is what is happening
+
+------
+
+------
+<div id='id-section34'/> 
+
+### Entry 34: 2026-07-06
+
+Alright, I took the weekend to decompress a bit because the mapping info has been a bit stressful...with some time and reflection, I have determined that this will be the path forward. 
+
+* The array I ran to extract the mapping stats had a failing exit code; I need to look back at that, check it out, and see what happened. Is this contributing to the samples that have very low mapping stats? 
+* Next, I need to look at the reality of how mapping stats and low mapping percentages impact the interpretibility of results: are low mapping stats an immediate throw out of the whole sample?
+* I also need to chat with Brent about this, how it plays into the manuscript, and the implications. 
+* Plot the mapping stats by sample: subset into adult, day 1, day 10, and final day and look at as a histogram. 
+
+As far as getting results that were a bit stressful to me, it was very helpful to take a few days to rest and then come back instead of trying to figure out, interpret, and solve everything right there. For future reference, this is 100% the correct call and to come back with a rested, clearer head. 
+
+* Step 1: Look at array error
+Here is the error message that I got from the array: 
+```
+cat array_4534580_57.out 
+Computing parallel coverage for: F06
+[W::cram_populate_ref] Creating reference cache directory /users/e/d/edombro1/.cache/hts-ref
+This may become large; see the samtools(1) manual page REF_CACHE discussion
+[E::easy_errno] Libcurl reported error 92 (Stream error in the HTTP/2 framing layer)
+[E::easy_errno] Libcurl reported error 92 (Stream error in the HTTP/2 framing layer)
+[W::find_file_url] Failed to read reference "https://www.ebi.ac.uk/ena/cram/md5/199cfe7d0b1329ded33480c10b113839": Input/output error
+/var/spool/slurm/d/job4534637/slurm_script: line 61: unexpected EOF while looking for matching ``'
+/var/spool/slurm/d/job4534637/slurm_script: line 66: syntax error: unexpected end of file
+```
+
+So, on my last script, I was getting an error because I copied and pased two extra lines from my code notebook...whoops. I have changed my workflow instead to reference the title of scripts and to edit them in their own .sh files that I will reference here instead. 
+
+I made edits to alignment_metric_qc_array.sh - before, I took out the reference from the script. Interesting behavior because the mapping requires looking at the reference...anyway, I added a pipe to the script so that samtools view can look at the reference so that it is in the memory of the computer, then samtools coverage will do the heavy lifting.
+
+Alright, I made the changes and the first file completely ran pretty quickly for trouble shooting; however, it does not look like the mapping proportions will change at all...those were coming from picard, and therefore not impacted by the script adjustments that caused the script to fail. So, it looks like the 24 samples really are that low. 
+
+Alright, I re-ran the array; it took less than two hours per sample, so the 12 hour time window is quite big. Next, I want to get the coverage information per sample and per chromosome/scaffold. 
+
+Next, I will run this code in the terminal to get a new file to feed into r and visualize the coverage: 
+```
+# 1. Create the master file and write a tidy header row
+echo -e "Sample\trname\tstartpos\tendpos\tnumreads\tcovbases\tcoverage\tmeandepth\tmeanbaseq\tmeanmapq" > primary_scaffolds_coverage.txt
+
+# 2. Loop through every sample's coverage file
+for file in *_coverage.txt; do
+    # Strip the suffix to get a clean sample name (e.g., B1R1-14C-D10-E1)
+    sample=$(basename "$file" _coverage.txt)
+    
+    # Use awk to find exact matches for your 14 chromosomes and prepend the sample ID
+    awk -v s="$sample" '
+    BEGIN {
+        split("NC_134838.1 NC_134839.1 NC_134840.1 NC_134841.1 NC_134842.1 NC_134843.1 NC_134844.1 NC_134845.1 NC_134846.1 NC_134847.1 NC_134848.1 NC_134849.1 NC_134850.1 NC_134851.1", targets)
+        for (i in targets) t[targets[i]] = 1
+    }
+    $1 in t { print s "\t" $0 }' "$file" >> primary_scaffolds_coverage.txt
+done
+```
+
+------
+
+------
+<div id='id-section35'/> 
+
+### Entry 35: 2026-07-07
+
+Alright, today I will be doing some more things in R. I have been continuing to make updates to my mapping_proportions script, though I have not loaded in the new data that I generated yesterday; if I am going to get to a place where I can move on to my pcas, I need to get moving. Additionally, my AMMR abstract was accepted for September, so I need to continue making progress. 
+
+Investigating further, the samples from day 1 and day 10 had very good mapping proportions (mapped reads/unmapped reads) (see box plot), while samples from days 10 and day 19/20 really dropped off. Particularly, there is a very high variance in the 22C conditions and a lower median mapping proportion. This is consistent with the hypothesis of algae contamination, as the algae would have been more likely to proliferate in the warmer temperature conditions, causing microbial shifts etc...
+
+
+
+------
