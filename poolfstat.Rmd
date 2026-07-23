@@ -1,0 +1,16 @@
+---
+title: "poolfstat"
+author: "Emily Dombrowski"
+date: "2026-07-16"
+output: html_document
+---
+This is a script for downloading and configuring poolfstat. 
+
+## Download and load library
+```{r}
+# install.packages("poolfstat")
+library(poolfstat)
+library(tidyverse)
+```
+
+Alright, it is loaded. 

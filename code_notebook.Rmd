@@ -2306,26 +2306,6 @@ Alright, I made the changes and the first file completely ran pretty quickly for
 
 Alright, I re-ran the array; it took less than two hours per sample, so the 12 hour time window is quite big. Next, I want to get the coverage information per sample and per chromosome/scaffold. 
 
-Next, I will run this code in the terminal to get a new file to feed into r and visualize the coverage: 
-```
-# 1. Create the master file and write a tidy header row
-echo -e "Sample\trname\tstartpos\tendpos\tnumreads\tcovbases\tcoverage\tmeandepth\tmeanbaseq\tmeanmapq" > primary_scaffolds_coverage.txt
-
-# 2. Loop through every sample's coverage file
-for file in *_coverage.txt; do
-    # Strip the suffix to get a clean sample name (e.g., B1R1-14C-D10-E1)
-    sample=$(basename "$file" _coverage.txt)
-    
-    # Use awk to find exact matches for your 14 chromosomes and prepend the sample ID
-    awk -v s="$sample" '
-    BEGIN {
-        split("NC_134838.1 NC_134839.1 NC_134840.1 NC_134841.1 NC_134842.1 NC_134843.1 NC_134844.1 NC_134845.1 NC_134846.1 NC_134847.1 NC_134848.1 NC_134849.1 NC_134850.1 NC_134851.1", targets)
-        for (i in targets) t[targets[i]] = 1
-    }
-    $1 in t { print s "\t" $0 }' "$file" >> primary_scaffolds_coverage.txt
-done
-```
-
 ------
 
 ------
@@ -2337,6 +2317,1444 @@ Alright, today I will be doing some more things in R. I have been continuing to 
 
 Investigating further, the samples from day 1 and day 10 had very good mapping proportions (mapped reads/unmapped reads) (see box plot), while samples from days 10 and day 19/20 really dropped off. Particularly, there is a very high variance in the 22C conditions and a lower median mapping proportion. This is consistent with the hypothesis of algae contamination, as the algae would have been more likely to proliferate in the warmer temperature conditions, causing microbial shifts etc...
 
+Anyway, moving on to coverage, here is an example head of a file that I get with the {sample}_coverage.txt files
 
+```
+head M10_coverage.txt 
+#rname	startpos	endpos	numreads	covbases	coverage	meandepth	meanbaseq	meanmapq
+NC_134838.1	1	133122103	74472933	121874506	91.5509	70.9874	39.5	34.4
+NC_134839.1	1	115872679	68438635	110184781	95.0913	75.7152	39.5	35.5
+NC_134840.1	1	112047329	62673746	103131897	92.0432	70.9654	39.5	34.9
+NC_134841.1	1	104860103	60623324	99232258	94.633	74.1967	39.5	35.9
+NC_134842.1	1	102992780	48433665	87102453	84.5714	58.2984	39.5	31.1
+NC_134843.1	1	102858672	54890997	93151744	90.5628	67.2043	39.5	33.9
+NC_134844.1	1	98048912	47857063	85919034	87.6287	60.8502	39.5	32.6
+NC_134845.1	1	97139405	45589519	82617690	85.0506	58.1648	39.5	33.1
+NC_134846.1	1	94721750	51812607	86902871	91.7454	69.3013	39.5	35.2
+```
+
+Let's make a summary file that extracts all this information from each sample, then with dplyr, we will add some additional columns to filter and make box plots. 
+
+```
+echo -e "sample\tchromosome\tstart_pos\tend_pos\tnumreads\tcovbases\tcoverage\tmeandepth\tmeanbaseq\tmeanmapq" > coverage_chrom.txt
+
+for file in *_coverage.txt; do
+    # Get a clean sample name (e.g., M10 or B1R1-14C-D10-E1)
+    sample=$(basename "$file" _coverage.txt)
+    
+    # Grep pulls out the 14 chromosomes, and awk attaches the sample name to the full line ($0)
+    grep -E "NC_134838.1|NC_134839.1|NC_134840.1|NC_134841.1|NC_134842.1|NC_134843.1|NC_134844.1|NC_134845.1|NC_134846.1|NC_134847.1|NC_134848.1|NC_134849.1|NC_134850.1|NC_134851.1" "$file" | \
+    awk -v s="$sample" '{print s "\t" $0}' >> coverage_chrom.txt
+done
+```
+
+This will essentially extract all of the information from the files. For now, I am developping code and looking at numbers in the 'chromosome_level_mapping.Rmd' file.
+
+Unfortunately, it looks like some of my samples that have low mapping rates *also* have on average low depth. Definitely a meeting with Brent...on the whole, coverage looks pretty high. Sigh. So. We shall see. 
+
+
+------
+
+------
+<div id='id-section36'/> 
+
+### Entry 36: 2026-07-08
+
+I messaged Brent to have a meeting, and this morning I am doing some reading about variable mapping rates. Here are some things that I have found and saved to my paper pile: 
+* A triple wash in FSW has been used to remove algal contamination from daphnia studies of fresh and preserved samples and found to be highly effective (Benide et al. 2020)
+* 
+
+Questions for meeting with Brent: 
+* what are implications of variable mapping rates on the rest of the data?
+* If SNPs for downstream processes are highly filtered, is that stringent enough to overcome the issue?
+* Are there other disciplines that face this issue? I imagine things like ancient DNA etc, so what are some interesting sources to consult/people in the department to talk to?
+* At what point should a sample be straight up discarded?
+* is there anything that can be done with the fact that there was more algae in particular trials? Is this a confounding factor in the experiment?
+
+Samples of particular issue: day 20, 22C, family 1: very low pool size, and lowest coverage samples. 
+
+Meeting with Brent notes:
+* Use packages that can identify contamination: it is more powerful if you can quantify the contamination and precisely name it
+* with quantification, the algae can be better accounted for
+* new figure to make: coverage vs. mapping rate
+  * how does low coverage affect allele frequency variation? (look at this on a graph)
+* possibility: down sampling for coverage
+* Joaquin can help out with variant calling questions
+* People to talk to: Joaquin, Melissa, Elise, Nasreen, Danny, Emily Longman
+
+------
+
+------
+<div id='id-section37'/> 
+
+### Entry 37: 2026-07-09
+
+I had a meeting with Nasreen regarding the samples with varying coverage. Working with ancient DNA, she had a very helpful perspective. Her advice was the following:
+
+* use SNP filtering: set the filtering for the VCF production step to filter to the lowest coverage sample
+* correction ML tree on filtered snps
+* plink for filtering
+* metagenomic screening tools: 
+  * kracken (version 2 or unique (lower false positive rate) - Nasreen and her undergrad can help out)
+  * metaphlan 4, molt (steeper learning curve)
+  * blastm (steeper learning curve on backend; Danny and Emily Longman have also used this on the VACC)
+
+------
+
+------
+<div id='id-section37'/> 
+
+### Entry 38: 2026-07-10
+
+Alright, I chatted with Joaquin and he reccomended the following things:
+* filter sequences in fastp/fastqc down to 19 bp and filter out the Nextera transposase sequence. 
+*Literally re-do the whole pipeline...lol. 
+
+
+So, let's continue. Here is some edited code that he suggested for trimming.
+
+#### 01_trim_array.sh version 1
+```bash
+#!/usr/bin/env bash
+#
+#SBATCH --job-name=stringent_trim
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4          
+#SBATCH --mem=16G                   
+#SBATCH --time=12:00:00
+#SBATCH --partition=general
+#SBATCH --array=1-70%20
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq/fastqc_reports/trim_%A_%a.out
+#SBATCH --error=/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq/fastqc_reports/trim_%A_%a.err
+#SBATCH --mail-type=ALL
+
+# Load dependency + programs
+module load gcc/13.3.0-xp3epyt
+module load fastp/0.23.4-mjw7rak
+module load fastqc
+
+# Define directories that contain raw data (located in netfiles, not scratch)
+DIR1="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4"
+DIR2="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4"
+
+# Workspace outputs
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq"
+mkdir -p ${OUT_DIR}/fastqc_reports
+
+# Exact ground-truth sample path provided
+SAMPLE_LIST="/users/e/d/edombro1/scratch/aus_mussels/data/trimmed/unique_samples.txt"
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $SAMPLE_LIST)
+
+echo "Processing task ID ${SLURM_ARRAY_TASK_ID}: Sample ${SAMPLE}"
+
+# Determine which folder this specific sample lives in
+if ls ${DIR1}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR1
+elif ls ${DIR2}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR2
+else
+    echo "ERROR: Sample ${SAMPLE} not found in either folder!"
+    exit 1
+fi
+
+# Define temporary pipe file markers to skip writing intermediate 140GB merge files to disk
+PIPE_R1="${OUT_DIR}/${SAMPLE}_r1.fifo"
+PIPE_R2="${OUT_DIR}/${SAMPLE}_r2.fifo"
+rm -f $PIPE_R1 $PIPE_R2
+mkfifo $PIPE_R1 $PIPE_R2
+
+echo "Streaming lane merging process on the fly for ${SAMPLE}..."
+# Using zcat to decompress binary streams on the fly into the named pipe
+zcat ${DATA_DIR}/${SAMPLE}_*L00*_R1.fastq.gz > $PIPE_R1 &
+zcat ${DATA_DIR}/${SAMPLE}_*L00*_R2.fastq.gz > $PIPE_R2 &
+
+echo "Running filtering on ${SAMPLE}..."
+# This blends your adapter detection with your advisor's quality thresholds
+# Explicitly removing Nextera transposase contamination
+# Trimming front 19bp based on output analysis
+fastp \
+  --thread $SLURM_CPUS_PER_TASK \
+  --in1 $PIPE_R1 \
+  --in2 $PIPE_R2 \
+  --out1 ${OUT_DIR}/${SAMPLE}_trimmed_R1.fastq.gz \
+  --out2 ${OUT_DIR}/${SAMPLE}_trimmed_R2.fastq.gz \
+  --html ${OUT_DIR}/${SAMPLE}_fastp.html \
+  --json ${OUT_DIR}/${SAMPLE}_fastp.json \
+  --detect_adapter_for_pe \
+  --adapter_sequence CTGTCTCTTATACACATCT \
+  --adapter_sequence_r2 CTGTCTCTTATACACATCT \
+  --trim_front1 19 \
+  --trim_front2 19 \
+  --cut_tail 18 \
+  --trim_poly_g \
+  --trim_poly_x \
+  --qualified_quality_phred 20 \
+  --average_qual 18 \
+  --length_required 30
+
+# Clean up streaming pipes safely
+rm -f $PIPE_R1 $PIPE_R2
+
+echo "Generating FastQC metrics..."
+fastqc -o ${OUT_DIR}/fastqc_reports -t $SLURM_CPUS_PER_TASK \
+  ${OUT_DIR}/${SAMPLE}_trimmed_R1.fastq.gz \
+  ${OUT_DIR}/${SAMPLE}_trimmed_R2.fastq.gz
+
+echo "Finished processing ${SAMPLE} cleanly."
+```
+
+------
+
+------
+<div id='id-section39'/> 
+
+### Entry 39: 2026-07-11
+
+Alright, checked back and the process timed out, likely because of the weird intermediate merging step. I just got rid of that and I have made the following adjustments for speed. 
+
+#### 01_trim_array.sh version 2
+```bash
+#!/usr/bin/env bash
+#
+#SBATCH --job-name=stringent_trim
+#SBATCH --output=trim_%A_%a.out
+#SBATCH --error=trim_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16          # Upped to 16 cores to process 70x data quickly
+#SBATCH --mem=40G                   # Upped to 40G RAM to comfortably handle the heavy file processing
+#SBATCH --time=12:00:00
+#SBATCH --partition=general
+#SBATCH --array=1-70%20
+#SBATCH --mail-type=ALL
+
+# Load dependency + programs
+module load gcc/13.3.0-xp3epyt
+module load fastp/0.23.4-mjw7rak
+module load fastqc/0.12.1-qxseug5
+
+# Define directories that contain raw data (located in netfiles, not scratch)
+DIR1="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-1_23JW2NLT4"
+DIR2="/netfiles/lockwood_lab/aus_mussels/data/raw/AGRF_NXGSQCAGRF25090171-2_23JW2NLT4"
+
+# Workspace outputs
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq"
+mkdir -p ${OUT_DIR}/fastqc_reports
+
+# meta data files
+SAMPLE_LIST="/users/e/d/edombro1/scratch/aus_mussels/data/trimmed/unique_samples.txt"
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $SAMPLE_LIST)
+
+echo "Processing task ID ${SLURM_ARRAY_TASK_ID}: Sample ${SAMPLE}"
+
+# Determine which folder this specific sample lives in
+if ls ${DIR1}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR1
+elif ls ${DIR2}/${SAMPLE}_* >/dev/null 2>&1; then
+    DATA_DIR=$DIR2
+else
+    echo "ERROR: Sample ${SAMPLE} not found in either folder!"
+    exit 1
+fi
+
+echo "Physically merging 8 lanes for ${SAMPLE} to disk..."
+cat ${DATA_DIR}/${SAMPLE}_*L00*_R1.fastq.gz > ${OUT_DIR}/${SAMPLE}_merged_R1.fastq.gz
+cat ${DATA_DIR}/${SAMPLE}_*L00*_R2.fastq.gz > ${OUT_DIR}/${SAMPLE}_merged_R2.fastq.gz
+
+echo "Running filtering on merged file for ${SAMPLE}..."
+# quality thresholds from Nunez lab
+# Explicitly removing Nextera transposase contamination
+# Trimming front 19bp based on output analysis
+fastp \
+  --thread $SLURM_CPUS_PER_TASK \
+  --in1 ${OUT_DIR}/${SAMPLE}_merged_R1.fastq.gz \
+  --in2 ${OUT_DIR}/${SAMPLE}_merged_R2.fastq.gz \
+  --out1 ${OUT_DIR}/${SAMPLE}_trimmed_R1.fastq.gz \
+  --out2 ${OUT_DIR}/${SAMPLE}_trimmed_R2.fastq.gz \
+  --html ${OUT_DIR}/${SAMPLE}_fastp.html \
+  --json ${OUT_DIR}/${SAMPLE}_fastp.json \
+  --detect_adapter_for_pe \
+  --adapter_sequence CTGTCTCTTATACACATCT \
+  --adapter_sequence_r2 CTGTCTCTTATACACATCT \
+  --trim_front1 19 \
+  --trim_front2 19 \
+  --cut_tail 18 \
+  --trim_poly_g \
+  --trim_poly_x \
+  --qualified_quality_phred 20 \
+  --average_qual 18 \
+  --length_required 30
+
+echo "Cleaning up temporary un-trimmed merged files to free up space..."
+rm -f ${OUT_DIR}/${SAMPLE}_merged_R1.fastq.gz ${OUT_DIR}/${SAMPLE}_merged_R2.fastq.gz
+
+echo "Generating FastQC metrics..."
+fastqc -o ${OUT_DIR}/fastqc_reports -t $SLURM_CPUS_PER_TASK \
+  ${OUT_DIR}/${SAMPLE}_trimmed_R1.fastq.gz \
+  ${OUT_DIR}/${SAMPLE}_trimmed_R2.fastq.gz
+
+echo "Finished processing ${SAMPLE} cleanly."
+```
+
+I ran `sbatch --array=1-1 01_trim_array.sh`
+It worked, and now I will run `sbatch --array=2-70 01_trim_array.sh`
+
+------
+
+------
+<div id='id-section40'/> 
+
+### Entry 40: 2026-07-12
+
+Alright; some notes about the script from last night. 
+* The capacitor in the sbatch heading does nothing. Everything ran at the same time with the command `sbatch --array=2-70 01_trim_array.sh`. This isn't a big deal for now, but given the size of the other files, it likely would be a big deal. So just make sure to do the throttle in the command when I run it.
+* The logs were put into the scripts folder. So those need to be moved to a 'logs' folder within the new directory. I should be able to do this using `mv trim_4* /users/e/d/edombro1/scratch/aus_mussels/data/trimmed_fq/logs`
+
+running multiqc for a quick visualization before moving on: 
+/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq/multiqc/_%a.out
+
+```
+#!/bin/bash
+#SBATCH --job-name=multiqc
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq/multiqc/multiqc_%j.out
+#SBATCH --error=/gpfs2/scratch/edombro1/aus_mussels/data/trimmed_fq/multiqc/multiqc_%j.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=4G
+#SBATCH --time=00:20:00
+#SBATCH --partition=short
+
+# script to visualize all fastq files at the same time
+
+module load gcc/13.3.0-xp3epyt
+module load py-multiqc/1.15-fmpaaj7
+
+cd /gpfs2/scratch/aus_mussels/data/trimmed_fq
+multiqc .
+```
+
+Okay, so trimming the first 20 base pairs did make things look a lot better. I think that was a good, worthwhile step. Next, I suppose I should check out the storage constraints and potentially clean some things up.
+
+#### 02_map_cutadapt.sh
+```bash
+#!/usr/bin/env bash
+#
+#SBATCH --job-name=map_mussels
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/cram_alignments/logs/map_%A_%a.out
+#SBATCH --error=/gpfs2/scratch/edombro1/aus_mussels/data/cram_alignments/logs/map_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --constraint=ib1
+#SBATCH --cpus-per-task=16          # 16 cores gives bwa-mem2 massive speed
+#SBATCH --mem=80G                   # 80G matches your committee member's recommendation for assembly loading
+#SBATCH --time=48:00:00
+#SBATCH --partition=general
+#SBATCH --array=1-70
+#SBATCH --mail-type=ALL
+
+# Load cluster modules
+module load bwa-mem2/2.2.1
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19.2-pfmpoam
+module load qualimap
+
+# Core computational variables
+NTHREADS=$SLURM_CPUS_PER_TASK
+SAMTOOLS_THREADS=$(($NTHREADS-1))
+# MEM_NODE=$(($(($SLURM_MEM_PER_NODE/1024))-5)) cause issues
+
+# Core computational variables
+NTHREADS=$SLURM_CPUS_PER_TASK
+SAMTOOLS_THREADS=$(($NTHREADS-1))
+QUALIMAP_MEM=30  # Explicitly give Qualimap 30GB of RAM
+
+# Ground-truth absolute paths
+REFERENCE_DIR="/users/e/d/edombro1/scratch/aus_mussels/data/reference"
+PATH_TO_ASSEMBLY="${REFERENCE_DIR}/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+PATH_TO_READS="/users/e/d/edombro1/scratch/aus_mussels/data/trimmed_fq"
+SAMPLE_LIST="/users/e/d/edombro1/scratch/aus_mussels/data/trimmed/unique_samples.txt"
+
+# Workspace output directories on gpfs2 scratch
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/cram_alignments"
+mkdir -p ${OUT_DIR}/logs
+mkdir -p ${OUT_DIR}/qualimap_reports
+
+# Parse sample name from your unique list
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $SAMPLE_LIST)
+echo "Starting mapping for Task ID ${SLURM_ARRAY_TASK_ID}: Sample ${SAMPLE}"
+
+# Input read paths matches your fresh fastp output format
+FReads="${PATH_TO_READS}/${SAMPLE}_trimmed_R1.fastq.gz"
+RReads="${PATH_TO_READS}/${SAMPLE}_trimmed_R2.fastq.gz"
+
+# Set up Read Group metadata tags for downstream variant calling
+RGLB="LIB-${SAMPLE}"
+RGSM="${SAMPLE}"
+
+# STEP 1: Align, Sort, Mark Duplicates, and Filter directly to a CRAM footprint on-the-fly.
+# We pass the -f 2 -F 3844 -q 20 criteria directly to avoid intermediate files.
+echo "Running bwa-mem2 and streaming directly into filtered CRAM..."
+bwa-mem2 mem \
+  -M -t $NTHREADS \
+  -R "@RG\tID:${SAMPLE}\tPL:ILLUMINA\tLB:${RGLB}\tSM:${RGSM}" \
+  $PATH_TO_ASSEMBLY \
+  $FReads \
+  $RReads | \
+samtools fixmate -u -m --threads $SAMTOOLS_THREADS - - | \
+samtools sort -u -T ${SAMPLE}_tmp --threads $SAMTOOLS_THREADS - | \
+samtools markdup -u --threads $SAMTOOLS_THREADS - - | \
+samtools view -h -b -f 2 -F 3844 -q 20 --reference $PATH_TO_ASSEMBLY --threads $SAMTOOLS_THREADS -O CRAM -o ${OUT_DIR}/${SAMPLE}.filtered.dedup.cram -
+
+# STEP 2: Coordinate index the final CRAM file (Required for downstream stats and tools)
+echo "Indexing CRAM file..."
+samtools index -@ $SAMTOOLS_THREADS ${OUT_DIR}/${SAMPLE}.filtered.dedup.cram
+
+# STEP 3: Generate alignment metrics
+echo "Calculating samtools stats..."
+samtools stats --threads $SAMTOOLS_THREADS \
+  --reference $PATH_TO_ASSEMBLY \
+  ${OUT_DIR}/${SAMPLE}.filtered.dedup.cram > ${OUT_DIR}/${SAMPLE}.filtered.dedup.cramstats
+
+# STEP 4: Run Qualimap validation
+echo "Running Qualimap QC..."
+qualimap bamqc \
+  -bam ${OUT_DIR}/${SAMPLE}.filtered.dedup.cram \
+  -outdir ${OUT_DIR}/qualimap_reports/${SAMPLE}_qualimap \
+  --java-mem-size=${QUALIMAP_MEM}G
+
+echo "Finished processing sample ${SAMPLE} successfully."
+```
+
+submitted a trial run. Let's see...
+
+------
+
+------
+<div id='id-section41'/> 
+
+### Entry 41: 2026-07-13
+
+Everything looks like it worked pretty well. The cram file size that has been deduplicated and only contains unique reads is substantially smaller than the ones I've been working with: only about 5 Gb instead of 25. Additionally, the script ran relatively quickly, no where near approaching the 48 hour limit: it ran in about 4.5 hours (from 12:10 pm - 4:40 pm), and sorted, indexed, and deduplicated all in one script. Woo. I will take it. 
+
+Here's some outputs that I got: 
+```
+# grep some samtools stats from the sample
+grep ^SN B1R1-14C-D10-E1.filtered.dedup.cramstats
+SN      raw total sequences:    227295128       # excluding supplementary and secondary reads
+SN      filtered sequences:     0
+SN      sequences:      227295128
+SN      is sorted:      1
+SN      1st fragments:  113650565
+SN      last fragments: 113644563
+SN      reads mapped:   227295128
+SN      reads mapped and paired:        227295128       # paired-end technology bit set + both mates mapped
+SN      reads unmapped: 0
+SN      reads properly paired:  227295128       # proper-pair bit set
+SN      reads paired:   227295128       # paired-end technology bit set
+SN      reads duplicated:       0       # PCR or optical duplicate bit set
+SN      reads MQ0:      0       # mapped and MQ=0
+SN      reads QC failed:        0
+SN      non-primary alignments: 0
+SN      supplementary alignments:       0
+SN      total length:   28527910035     # ignores clipping
+SN      total first fragment length:    14265102981     # ignores clipping
+SN      total last fragment length:     14262807054     # ignores clipping
+SN      bases mapped:   28527910035     # ignores clipping
+SN      bases mapped (cigar):   24037517578     # more accurate
+SN      bases trimmed:  0
+SN      bases duplicated:       0
+SN      mismatches:     771279309       # from NM fields
+SN      error rate:     3.208648e-02    # mismatches / bases mapped (cigar)
+SN      average length: 126
+SN      average first fragment length:  126
+SN      average last fragment length:   126
+SN      maximum length: 131
+SN      maximum first fragment length:  131
+SN      maximum last fragment length:   131
+SN      average quality:        39.6
+SN      insert size average:    212.8
+SN      insert size standard deviation: 139.2
+SN      inward oriented pairs:  90648905
+SN      outward oriented pairs: 22998373
+SN      pairs with other orientation:   0
+SN      pairs on different chromosomes: 0
+SN      percentage of properly paired reads (%):        100.0
+
+# look at amount of total reads in file
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19.2-pfmpoam
+samtools view -c B1R1-14C-D10-E1.filtered.dedup.cram
+227295128
+
+# look at stats output by samtools
+samtools flagstat B1R1-14C-D10-E1.filtered.dedup.cram
+227295128 + 0 in total (QC-passed reads + QC-failed reads)
+227295128 + 0 primary
+0 + 0 secondary
+0 + 0 supplementary
+0 + 0 duplicates
+0 + 0 primary duplicates
+227295128 + 0 mapped (100.00% : N/A)
+227295128 + 0 primary mapped (100.00% : N/A)
+227295128 + 0 paired in sequencing
+113650565 + 0 read1
+113644563 + 0 read2
+227295128 + 0 properly paired (100.00% : N/A)
+227295128 + 0 with itself and mate mapped
+0 + 0 singletons (0.00% : N/A)
+0 + 0 with mate mapped to a different chr
+0 + 0 with mate mapped to a different chr (mapQ>=5)
+```
+
+Something to note is that the qualimap validation did not produce anything. This is likely a result of the .cram file usage, so here is some edited code that should directly use the reference to produce that. 
+
+#### 02_cutadapt.sh qualimap edits
+```
+# STEP 4: Run Qualimap validation
+echo "Running Qualimap QC..."
+qualimap bamqc \
+  -bam ${OUT_DIR}/${SAMPLE}.filtered.dedup.cram \
+  -outdir ${OUT_DIR}/qualimap_reports/${SAMPLE}_qualimap \
+  --java-mem-size=${QUALIMAP_MEM}G \
+  -nw \
+  --java-options="-Dsamjdk.reference_fasta=${PATH_TO_ASSEMBLY}"
+```
+
+When I ran this script, it looks like about 3 jobs are running at once even though I ran `sbatch --array=2-70%20 02_cutadapt.sh`. I think the 48 hours of wall time would really slow this down. 
+
+From here, my next step is to run Bayepass for variant calling. I should look at Emily's scripts and go from there. 
+
+Alright, let's take a look at Emily's script and go from there.
+Source: https://github.com/emily-longman/Nucella_can_Pop_Genomics/blob/main/src/02_fastq_to_vcf/03_call_variants/03_variant_calling.sh
+
+
+#### E. Longman's bayepass variant calling script
+```
+#!/usr/bin/env bash
+
+# In the command line, run the following command: sbatch path/to/this/file.sh
+
+# Request cluster resources ----------------------------------------------------
+
+# Name this job
+#SBATCH --job-name=variant_calling_freebayes
+
+# Specify partition
+#SBATCH --partition=general
+
+# Request nodes
+#SBATCH --nodes=1 
+
+# Reserve walltime -- hh:mm:ss --30 hrs max
+#SBATCH --time=30:00:00 
+
+# Request memory for the entire job -- you can request --mem OR --mem-per-cpu
+#SBATCH --mem=60G 
+
+# Request CPU
+#SBATCH --cpus-per-task=4
+
+# Submit job array
+#SBATCH --array=1-631%25
+
+# Name output of this job using %x=job-name and %j=job-id
+#SBATCH --output=./slurmOutput/%x.%A_%a.out # Standard output
+
+# Receive emails when job begins and ends or fails
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=emily.longman@uvm.edu 
+
+#--------------------------------------------------------------------------------
+
+# This script will use freebayes to call variants.
+
+# Note: Since the N. canaliculata genome consistent of many scaffolds, I chunked the genome into 50 scaffolds partitions to utilize an array structure.
+# For each slurm array ID, freebayes is running over the 50 scaffolds using a loop then the vcf files are combined together.  
+
+#--------------------------------------------------------------------------------
+
+# Load modules 
+module load gcc/13.3.0-xp3epyt
+module load freebayes/1.3.6-r67va2b
+module load bcftools/1.19-iq5mwek
+
+#--------------------------------------------------------------------------------
+
+# Define important file locations
+
+# WORKING_FOLDER is the core folder where this pipeline is being run.
+WORKING_FOLDER=/gpfs2/scratch/elongman/Nucella_can_Pop_Genomics
+
+# This is the location where the reference genome is stored.
+REFERENCE_FOLDER=/netfiles/pespenilab_share/Nucella/processed/Base_Genome/Base_Genome_Oct2024/Crassostrea_softmask
+
+# This is the path to the reference genome.
+REFERENCE=$REFERENCE_FOLDER/N.canaliculata_assembly.fasta.softmasked.fa
+
+#--------------------------------------------------------------------------------
+
+## Import master partition file 
+GUIDE_FILE=$WORKING_FOLDER/guide_files/Scaffold_names_array.txt
+
+#Example: -- the headers are just for descriptive purposes. The actual file has no headers. (dimensions: 2, 18919; 631 partitions)
+# Scaffold name       # Partition
+# Backbone_10001            1
+# Backbone_10003            1
+# Backbone_10004            1
+# ....
+
+#--------------------------------------------------------------------------------
+
+# Determine partition to process 
+
+# Echo slurm array task ID
+echo ${SLURM_ARRAY_TASK_ID}
+
+# Change directory 
+cd $WORKING_FOLDER/data/processed/fastq_to_vcf
+
+# Using the guide file, extract the scaffold names associated based on the Slurm array task ID for a given partition
+awk '$2=='${SLURM_ARRAY_TASK_ID}'' $GUIDE_FILE | awk '{print $1}' > genome.scaffold.names.${SLURM_ARRAY_TASK_ID}.txt
+
+#--------------------------------------------------------------------------------
+
+# Generate Folders and files
+
+# Move to working directory
+cd $WORKING_FOLDER/data/processed/fastq_to_vcf
+
+# This part of the script will check and generate, if necessary, all of the output folders used in the script
+
+if [ -d "vcf_freebayes" ]
+then echo "Working vcf_freebayes folder exist"; echo "Let's move on."; date
+else echo "Working vcf_freebayes folder doesnt exist. Let's fix that."; mkdir $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes; date
+fi
+
+cd $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes
+
+if [ -d "partitions" ]
+then echo "Working partitions folder exist"; echo "Let's move on."; date
+else echo "Working partitions folder doesnt exist. Let's fix that."; mkdir $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions; date
+fi
+
+cd $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions
+
+if [ -d "genome.scaffold.names.${SLURM_ARRAY_TASK_ID}" ]
+then echo "Working genome.scaffold.names.${SLURM_ARRAY_TASK_ID} folder exist"; echo "Let's move on."; date
+else echo "Working genome.scaffold.names.${SLURM_ARRAY_TASK_ID} folder doesnt exist. Let's fix that."; mkdir $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions/genome.scaffold.names.${SLURM_ARRAY_TASK_ID}; date
+fi
+
+#--------------------------------------------------------------------------------
+
+# Prepare bamlist
+# This is a file with the name and full path of all the bam files to be processed.
+
+# Move to bams folder
+cd $WORKING_FOLDER/data/processed/fastq_to_vcf/RGSM_final_bams
+
+# Create bamlist for all Nucella samples
+ls *.bam > $WORKING_FOLDER/data/processed/fastq_to_vcf/guide_files/Nucella_pops_bam_names.list
+
+BAMLIST=$WORKING_FOLDER/data/processed/fastq_to_vcf/guide_files/Nucella_pops_bam_names.list
+
+#--------------------------------------------------------------------------------
+
+# Use freebayes to call variants
+
+# Note: 
+# The freebayes algorithm exploits a neutral model of allele diffusion to impute most-confident genotypings across the
+# entire population. In practice, the discriminant power of the method will improve if you run multiple samples simultaneously. 
+# In other words, if your study has multiple individuals, you should run freebayes against them at the same time via a bamlist. 
+
+# For the scaffolds in a given partition, generate a vcf file for each scaffold then cat them together. 
+
+# Cat file of scaffold names and start while loop
+cat $WORKING_FOLDER/data/processed/fastq_to_vcf/genome.scaffold.names.${SLURM_ARRAY_TASK_ID}.txt | \
+while read SCAFFOLD 
+do echo ${SCAFFOLD}
+
+freebayes -f $REFERENCE -L $BAMLIST -r ${SCAFFOLD} -K -F 0.01 -C 1 -G 5 --limit-coverage 500 -n 4 -m 30 -q 20 | gzip -c > $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions/genome.scaffold.names.${SLURM_ARRAY_TASK_ID}/Nucella.freebayes.${SCAFFOLD}.vcf.gz
+
+done 
+
+# -K --pooled-continuous : Output all alleles which pass input filters, regardles of genotyping outcome or model.
+## Least expensive option in time/memory because if we use pool-discrete it is necessary to specify a haploid pool size and it calculates the likelihoods for each possible configuration which can take a long time.
+
+# -F --min-alternate-fraction N : Require at least this fraction of observations supporting an alternate allele within a single individual in order to evaluate the position.  default: 0.05
+## In the case of Pool-seq it is better to reduce this value so as not to penalize rare alleles present in a pool.
+## With the default value, any variant represented by <5% of reads in the pool would be ignored. 
+
+# -C --min-alternate-count N : Require at least this count of observations supporting an alternate allele within a single individual in order to evaluate the position.  default: 2
+## Reduce to 1 for the same reason as -F
+
+# -G --min-alternate-total N : Require at least this count of observations supporting an alternate allele within the TOTAL population in order to use the allele in analysis.  default: 1
+## Increased to 5. Given that we generally apply to many pools, avoid carrying around ultra rare alleles, which are probably sequencing errors. This also reduces computational costs.
+## Caution however may have an impact for methods based on SFS.
+
+# --limit-coverage N: Downsample per-sample coverage to this level if greater than this coverage. default: no limit
+
+# -m --min-mapping-quality Q : Exclude alignments from analysis if they have a mapping quality less than Q.  default: 1
+# -q --min-base-quality Q : Exclude alleles from analysis if their supporting base quality is less than Q.  default: 0
+## Classic quality criteria (Note: may need to be readjusted if we recalibrate the Base Quality BQSR)?
+
+# -n --use-best-n-alleles N : Evaluate only the best N SNP alleles, ranked by sum of supporting quality scores.  (Set to 0 to use all (i.e., default))
+## Reduced to 4 (see recommendation for computational cost reduction). Be careful however because the other alleles are simply not considered (i.e., the real DP may vary from the actual DP, i.e., sum of coverage of the reported alleles)
+## Most of the time, we will only retain bi-allelics (or very poorly covered alleles will be removed: see poolfstat)(in GATK HaplotypeCaller it is 7 by default because --max-alternate-alleles 6)
+
+# --strict-vcf Generate strict VCF format (FORMAT/GQ will be an int)
+# Genotype quality (not useful here since pooled-continuous) are given by default in log10 scale likelihood (=> heavy the output file)
+
+#--------------------------------------------------------------------------------
+
+# Combine the vcf files from all of the scaffolds in a given partition
+
+bcftools concat \
+$WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions/genome.scaffold.names.${SLURM_ARRAY_TASK_ID}/*.vcf.gz \
+-Oz -o $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions/genome.scaffold.names.${SLURM_ARRAY_TASK_ID}.vcf.gz
+
+#--------------------------------------------------------------------------------
+
+# Change directory
+cd $WORKING_FOLDER/data/processed/fastq_to_vcf
+
+# Housekeeping
+rm genome.scaffold.names.${SLURM_ARRAY_TASK_ID}.txt
+rm -R $WORKING_FOLDER/data/processed/fastq_to_vcf/vcf_freebayes/partitions/genome.scaffold.names.${SLURM_ARRAY_TASK_ID}
+
+#--------------------------------------------------------------------------------
+
+date
+echo "done"
+
+#--------------------------------------------------------------------------------
+
+#### INFO and FORMAT field of the vcf
+
+##INFO=<ID=NS,Number=1,Type=Integer,Description="Number of samples with data">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total read depth at the locus">
+##INFO=<ID=DPB,Number=1,Type=Float,Description="Total read depth per bp at the locus; bases in reads overlapping / bases in haplotype">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Total number of alternate alleles in called genotypes">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles in called genotypes">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Estimated allele frequency in the range (0,1]">
+##INFO=<ID=RO,Number=1,Type=Integer,Description="Count of full observations of the reference haplotype.">
+##INFO=<ID=AO,Number=A,Type=Integer,Description="Count of full observations of this alternate haplotype.">
+##INFO=<ID=PRO,Number=1,Type=Float,Description="Reference allele observation count, with partial observations recorded fractionally">
+##INFO=<ID=PAO,Number=A,Type=Float,Description="Alternate allele observations, with partial observations recorded fractionally">
+##INFO=<ID=QR,Number=1,Type=Integer,Description="Reference allele quality sum in phred">
+##INFO=<ID=QA,Number=A,Type=Integer,Description="Alternate allele quality sum in phred">
+##INFO=<ID=PQR,Number=1,Type=Float,Description="Reference allele quality sum in phred for partial observations">
+##INFO=<ID=PQA,Number=A,Type=Float,Description="Alternate allele quality sum in phred for partial observations">
+##INFO=<ID=SRF,Number=1,Type=Integer,Description="Number of reference observations on the forward strand">
+##INFO=<ID=SRR,Number=1,Type=Integer,Description="Number of reference observations on the reverse strand">
+##INFO=<ID=SAF,Number=A,Type=Integer,Description="Number of alternate observations on the forward strand">
+##INFO=<ID=SAR,Number=A,Type=Integer,Description="Number of alternate observations on the reverse strand">
+##INFO=<ID=SRP,Number=1,Type=Float,Description="Strand balance probability for the reference allele: Phred-scaled upper-bounds estimate of the probability of observing the deviation between SRF and SRR given E(SRF/SRR) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=SAP,Number=A,Type=Float,Description="Strand balance probability for the alternate allele: Phred-scaled upper-bounds estimate of the probability of observing the deviation between SAF and SAR given E(SAF/SAR) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=AB,Number=A,Type=Float,Description="Allele balance at heterozygous sites: a number between 0 and 1 representing the ratio of reads showing the reference allele to all reads, considering only reads from individuals called as heterozygous">
+##INFO=<ID=ABP,Number=A,Type=Float,Description="Allele balance probability at heterozygous sites: Phred-scaled upper-bounds estimate of the probability of observing the deviation between ABR and ABA given E(ABR/ABA) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=RUN,Number=A,Type=Integer,Description="Run length: the number of consecutive repeats of the alternate allele in the reference genome">
+##INFO=<ID=RPP,Number=A,Type=Float,Description="Read Placement Probability: Phred-scaled upper-bounds estimate of the probability of observing the deviation between RPL and RPR given E(RPL/RPR) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=RPPR,Number=1,Type=Float,Description="Read Placement Probability for reference observations: Phred-scaled upper-bounds estimate of the probability of observing the deviation between RPL and RPR given E(RPL/RPR) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=RPL,Number=A,Type=Float,Description="Reads Placed Left: number of reads supporting the alternate balanced to the left (5') of the alternate allele">
+##INFO=<ID=RPR,Number=A,Type=Float,Description="Reads Placed Right: number of reads supporting the alternate balanced to the right (3') of the alternate allele">
+##INFO=<ID=EPP,Number=A,Type=Float,Description="End Placement Probability: Phred-scaled upper-bounds estimate of the probability of observing the deviation between EL and ER given E(EL/ER) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=EPPR,Number=1,Type=Float,Description="End Placement Probability for reference observations: Phred-scaled upper-bounds estimate of the probability of observing the deviation between EL and ER given E(EL/ER) ~ 0.5, derived using Hoeffding's inequality">
+##INFO=<ID=DPRA,Number=A,Type=Float,Description="Alternate allele depth ratio.  Ratio between depth in samples with each called alternate allele and those without.">
+##INFO=<ID=ODDS,Number=1,Type=Float,Description="The log odds ratio of the best genotype combination to the second-best.">
+##INFO=<ID=GTI,Number=1,Type=Integer,Description="Number of genotyping iterations required to reach convergence or bailout.">
+##INFO=<ID=TYPE,Number=A,Type=String,Description="The type of allele, either snp, mnp, ins, del, or complex.">
+##INFO=<ID=CIGAR,Number=A,Type=String,Description="The extended CIGAR representation of each alternate allele, with the exception that '=' is replaced by 'M' to ease VCF parsing.  Note that INDEL alleles do not have the first matched base (which is provided by default, per the spec) referred to by the CIGAR.">
+##INFO=<ID=NUMALT,Number=1,Type=Integer,Description="Number of unique non-reference alleles in called genotypes at this position.">
+##INFO=<ID=MEANALT,Number=A,Type=Float,Description="Mean number of unique non-reference allele observations per sample with the corresponding alternate alleles.">
+##INFO=<ID=LEN,Number=A,Type=Integer,Description="allele length">
+##INFO=<ID=MQM,Number=A,Type=Float,Description="Mean mapping quality of observed alternate alleles">
+##INFO=<ID=MQMR,Number=1,Type=Float,Description="Mean mapping quality of observed reference alleles">
+##INFO=<ID=PAIRED,Number=A,Type=Float,Description="Proportion of observed alternate alleles which are supported by properly paired read fragments">
+##INFO=<ID=PAIREDR,Number=1,Type=Float,Description="Proportion of observed reference alleles which are supported by properly paired read fragments">
+##INFO=<ID=MIN_DP,Number=1,Type=Integer,Description="Minimum depth in gVCF output block.">
+##INFO=<ID=END,Number=1,Type=Integer,Description="Last position (inclusive) in gVCF output record.">
+##INFO=<ID=technology.ILLUMINA,Number=A,Type=Float,Description="Fraction of observations supporting the alternate observed in reads from ILLUMINA">
+
+
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Float,Description="Genotype Quality, the Phred-scaled marginal (or unconditional) probability of the called genotype">
+##FORMAT=<ID=GL,Number=G,Type=Float,Description="Genotype Likelihood, log10-scaled likelihoods of the data given the called genotype for each possible genotype generated from the reference and alternate alleles given the sample ploidy">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Number of observation for each allele">
+##FORMAT=<ID=RO,Number=1,Type=Integer,Description="Reference allele observation count">
+##FORMAT=<ID=QR,Number=1,Type=Integer,Description="Sum of quality of the reference observations">
+##FORMAT=<ID=AO,Number=A,Type=Integer,Description="Alternate allele observation count">
+##FORMAT=<ID=QA,Number=A,Type=Integer,Description="Sum of quality of the alternate observations">
+##FORMAT=<ID=MIN_DP,Number=1,Type=Integer,Description="Minimum depth in gVCF output block.">
+
+```
+
+So, Emily divided up this script into an array based on her 600+ scaffolds. It looks like my genome, having been already assembled and haplotype phased and not quite so mucus-y, is a bit cleaner. There are already 
+* 14 chromosome scaffolds, and 
+* 325 additional scaffolds
+So, my array will utilize the existing samples and attempt to create some other files that are balanced to run the other stuff. 
+
+Here is some code I will run to split things up: 
+
+```
+# This script reads your 339 targets, assigns the first 14 main chromosomes 
+# to bins 1-14, and groups the remaining 325 scaffolds into bins of 15-20.
+# (Adjust the 'per_bin' variable below to change how many small scaffolds share a slot)
+
+awk 'NR==FNR {lengths[$1]=$2; next} 
+{
+    if (FNR <= 14) {
+        print $1, FNR
+    } else {
+        # Groups remaining scaffolds (e.g., 50 per bin) starting at bin 15
+        per_bin = 50 
+        bin_num = 15 + int((FNR - 15) / per_bin)
+        print $1, bin_num
+    }
+}' GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai chrom_filter_bounds.txt > Scaffold_names_array.txt
+
+# check the sizes of each bin to make sure they're not weirdly allocated
+awk 'NR==FNR {lengths[$1]=$2; next} 
+{
+    if (FNR <= 14) {
+        bin_num = FNR
+    } else {
+        bin_num = 15 + int((FNR - 15) / 50)
+    }
+    bin_lengths[bin_num] += lengths[$1]
+} 
+END {
+    print "Bin_Number\tTotal_Length_BP"
+    for (b in bin_lengths) {
+        printf "Bin_%d\t\t%'\''d bp\n", b, bin_lengths[b]
+    }
+}' GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai chrom_filter_bounds.txt | sort -V
+```
+
+This produced a two column file that has two columns: one with the scaffold name, one with a number 1-25. The first 14 chromosomes have their own assignment, but the smaller scaffolds have been grouped into clusters of 15 samples/scaffold. I also ran a check to see how big each bin is: 
+Bin_1		0 bp
+Bin_2		133,122,103 bp
+Bin_3		115,872,679 bp
+Bin_4		112,047,329 bp
+Bin_5		104,860,103 bp
+Bin_6		102,992,780 bp
+Bin_7		102,858,672 bp
+Bin_8		98,048,912 bp
+Bin_9		97,139,405 bp
+Bin_10		94,721,750 bp
+Bin_11		91,363,364 bp
+Bin_12		86,550,376 bp
+Bin_13		81,349,889 bp
+Bin_14		74,365,144 bp
+Bin_15		79,629,639 bp
+Bin_16		3,487,412 bp
+Bin_17		2,396,303 bp
+Bin_18		1,889,683 bp
+Bin_19		1,507,108 bp
+Bin_20		1,036,094 bp
+Bin_21		132,831 bp
+Bin_Number	Total_Length_BP
+So, it looks like bin 1 was assigned to a header...let's fix that
+
+```
+awk 'NR==FNR {lengths[$1]=$2; next} 
+# NR>1 skips the header line in chrom_filter_bounds.txt
+FNR>1 {
+    # Adjust FNR by subtracting 1 to account for the skipped header
+    current_row = FNR - 1
+    
+    if (current_row <= 14) {
+        bin_num = current_row
+    } else {
+        # Groups the remaining 325 small scaffolds into bins of 50
+        bin_num = 15 + int((current_row - 15) / 50)
+    }
+    print $1, bin_num
+}' GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai chrom_filter_bounds.txt > Scaffold_names_array.txt
+```
+
+Next, I will have to update the file paths in the script and run a trial. Perhaps I can run the trial even as the cram files continue to populate? I'm not sure. 
+I'm going to do my script editing in a new document. 
+
+------
+
+------
+<div id='id-section42'/> 
+
+### Entry 42: 2026-07-14
+
+Notes from meeting with Melissa: 
+* quantify algal contamination with specific species
+* consider a standardized 25x coverage bottom for all SNPS
+* when thinking about the snps for all samples, consider a snp matrix with snps and samples
+  * the filtering requirements can be that ALL samples are required to have all SNPs
+  * or, that most samples are required to have required snps
+  * mess around with the missingness criteria and see how it impacts snps
+* visualize multiple possiblilities as PCA or dendrogram to show relatedness
+* see where biological realism falls apart
+* attention to terminology: "family" in genetics refers to a single male / female cross
+* major trade off: no data missingness (stringent filtering) vs. higher quality with sample dropping
+* on PCA, the lowest coverage outliers could be an artifact of PCA mapping
+* Look at Reids github for more information about subsequent steps with FreeBayes and poolfstat.
+
+Summary to Brent: 
+* Nasreen recommended filtering sample coverage down to what is present in the lowest individual and gave some good recommendations on metagenomics software for looking into the algae contamination
+* Joaquin recommended more stringent filtering steps in the early stages as well as very strict SNP calling. He also threw out the idea of a SLiM simulation to test the question of how variable coverage across samples impacts later assessments of snps related to selection, which I think is interesting, but would take me a good while to implement. 
+* Melissa's recommendation was to keep varying levels of "missingness" when SNP filtering, then compare sample clustering on the resulting PCAs. From there, we can make more informed decisions about whether or not individual samples need to be dropped or if stringent SNP filtering will produce clearer candidate SNPs. For example: run variant calling keeping SNPs that are present in 80% of the samples, and compare to a more stringent filtering situation. When visualized on a PCA or dendrogram, the different levels of filtering and individuals contributing to candidate SNPs can be assessed.
+These steps give me a pretty clear game plan of where to go next. If you are around for the rest of the week, I am also happy to chat about this in person. For now, I am implementing some of Joaquin's filtering suggestions, then I will use FreeBayes to variant call and PoolFStat to start visualizing the data. 
+
+------
+
+------
+<div id='id-section43'/> 
+
+### Entry 43: 2026-07-15
+
+Okay, so I ran the code Joaquin sent over with more stringent filtering steps. I am having regrets for filtering so stringently and throwing out the unmapped reads because Melissa also mentioned measuring and quantifying the algal contamination. Additionally, E. Longman mentioned that for 
+
+------
+
+------
+<div id='id-section44'/> 
+
+### Entry 44: 2026-07-16
+
+
+#### extract samtools stats (cov_stat)
+
+#### 03.1_samtools_summary.sh
+```bash
+#!/usr/bin/env bash
+#SBATCH --job-name=chromo_coverage
+#SBATCH --partition=short
+#SBATCH --nodes=1
+#SBATCH --time=00:20:00
+#SBATCH --mem=8G
+#SBATCH --cpus-per-task=4
+#SBATCH --array=1-70%15
+#SBATCH --output=/gpfs2/scratch/edombro1/aus_mussels/data/cram_alignments/logs/cov_%A_%a.out
+
+# Load samtools
+module load gcc/13.3.0-xp3epyt
+module load samtools/1.19.2-pfmpoam
+
+# Paths
+REFERENCE_DIR="/users/e/d/edombro1/scratch/aus_mussels/data/reference"
+PATH_TO_ASSEMBLY="${REFERENCE_DIR}/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+SAMPLE_LIST="/users/e/d/edombro1/scratch/aus_mussels/data/trimmed/unique_samples.txt"
+OUT_DIR="/gpfs2/scratch/edombro1/aus_mussels/data/cram_alignments"
+
+# Parse the sample name based on the SLURM Task ID
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $SAMPLE_LIST)
+
+# Run fast, multi-threaded chromosome-by-chromosome coverage
+samtools coverage \
+  --threads 3 \
+  --reference $PATH_TO_ASSEMBLY \
+  ${OUT_DIR}/${SAMPLE}.filtered.dedup.cram \
+  > ${OUT_DIR}/${SAMPLE}.chromosome_coverage.txt
+
+```
+Step 1: use an array to go through each sample and generate this chromosome coverage script. Then, we will move on to step 2, which will look at that script and loop through by grouping the primary scaffolds (chromosomes) and the samples. 
+
+```bash
+
+# Path to your list of 14 chromosomes
+CHROM_LIST="/users/e/d/edombro1/scratch/aus_mussels/data/reference/primary_chromosomes.txt"
+
+# Initialize the master CSV with explicit headers
+echo "sample,chromosome,start,end,numreads,covbases,breadth_of_coverage,depth,meanmapq,percentage_gc" > master_qc_and_coverage.csv
+
+# Loop over all your chromosome coverage files
+for f in *.chromosome_coverage.txt; do
+    SAMPLE=$(basename "$f" .chromosome_coverage.txt)
+    echo "Filtering and compiling stats for ${SAMPLE}..."
+    
+    # Use awk to:
+    # 1. Read main_chromosomes.txt into an associative array (FNR==NR)
+    # 2. Match only those chromosomes in the sample file (FNR>1 && $1 in chroms)
+    # 3. Print matching rows and calculate the weighted "all" totals for just these 14
+    awk -F'\t' -v s="$SAMPLE" '
+        NR==FNR { 
+            chroms[$1]; 
+            next 
+        }
+        FNR > 1 && ($1 in chroms) {
+            # Print the individual chromosome line directly
+            print s "," $1 "," $2 "," $3 "," $4 "," $5 "," $6 "," $7 "," $8 "," $9
+            
+            # Accumulate totals ONLY for these 14 chromosomes
+            total_len += ($3 - $2);
+            total_reads += $4;
+            total_cov_bases += $5;
+            sum_depth_x_len += ($7 * ($3 - $2));
+            sum_mapq_x_len += ($8 * ($3 - $2));
+            sum_gc_x_len += ($9 * ($3 - $2));
+        }
+        END {
+            if (total_len > 0) {
+                # Calculate True weighted statistics of ONLY the 14 chromosomes
+                avg_breadth = (total_cov_bases / total_len) * 100;
+                avg_depth = sum_depth_x_len / total_len;
+                avg_mapq = sum_mapq_x_len / total_len;
+                avg_gc = sum_gc_x_len / total_len;
+                
+                print s ",all,1," total_len "," total_reads "," total_cov_bases "," avg_breadth "," avg_depth "," avg_mapq "," avg_gc
+            }
+        }
+    ' "$CHROM_LIST" "$f" >> master_qc_and_coverage.csv
+done
+
+echo "Finished! Clean dataset written to 'master_qc_and_coverage.csv'"
+```
+
+------
+
+------
+<div id='id-section45'/> 
+
+### Entry 45: 2026-07-17
+
+So, my Freebayes code timed out at 30 hours; which is why we run a check! I think the next move will be splitting the chromosomes into smaller windows, then running the script. For example, my array was 21 long; Longman's was 600+... so, let's use that method. Here's some code that I used to split the chromosome into smaller pieces. 
+
+```bash
+awk '
+{
+  chr=$1
+  len=$2
+
+  for(start=1; start<=len; start+=10000000){
+    end=start+9999999
+    if(end>len) end=len
+    print chr ":" start "-" end
+  }
+}
+' GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai > regions_10Mb.txt
+```
+
+When I ran `wc -l regions_10Mb.txt`, I got 469 regions. So, my new array will be for 469 regions. I will update my freebayes script to reflect this, while still keeping the 30 hour time window. Hopefully it will go more quickly than that...
+
+I changed the script and launched a test run. I will check back to see how it is doing. 
+
+------
+
+------
+<div id='id-section46'/> 
+
+### Entry 46: 2026-07-18
+
+
+I came back to check on the script and it had not quite timed out at 30 hours...I am doing another trial of a different region with 48 hours to see how it goes. 
+
+------
+
+------
+<div id='id-section47'/> 
+
+### Entry 47: 2026-07-20
+
+My test array of the 10 MB portion of the genome has been running for over 30 hours...godwilling, it will finish in the near future. My goals for today are to: 
+
+* do research on meta genomics software (kraken, blast, etc.)
+* decide a pipeline for looking at the algal contamination
+* locate an algal genome for reference? 
+
+Here's some notes on my research. 
+
+* Papers that look at similar things: 
+  * one about scallops (Gerdol et al. 2014);
+  * one about HABs and bivalves (Griffith et al. 2019)
+* Pipeline: 
+  1. Run fastq on all samples
+  2. Get pertinent algae genomes and download
+    a. *Isochrysis sp., Pavlova sp., Tetraselmis sp., Thalassiosira weissflogii, and Thalassiosira pseudonana*
+  3. Run kraken uniq on all samples (similar to multiqc)
+  4. look at the breakdown of how things mapped...will also show prokaryotes and eukaryotes
+  
+When I did module spider for krakenuniq, this is what came up: 
+
+To download the reference genomes for the algae, I will use these: 
+
+#### download algal genomes from NCBI
+```
+#!/bin/bash
+#SBATCH --job-name=download_ref
+#SBATCH --partition=short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=2G
+#SBATCH --time=02:00:00
+#SBATCH --output=download_%j.out
+#SBATCH --error=download_%j.err
+#SBATCH --mail-type=ALL
+
+echo "Starting download of algal reference genomes..."; date
+
+# ------------------------------------------------------------------
+# 1. ISOCHRYSIS (Isochrysis galbana)
+# ------------------------------------------------------------------
+wget "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/018/136/815/GCA_018136815.1_ASM1813681v1/GCA_018136815.1_ASM1813681v1_genomic.fna.gz"
+
+if [ -s "GCA_018136815.1_ASM1813681v1_genomic.fna.gz" ]
+then 
+    echo "Isochrysis reference genome successfully downloaded!"
+else 
+    echo "ERROR: Isochrysis reference genome did not download; check script."
+fi
+
+# ------------------------------------------------------------------
+# 2. PAVLOVA (Diacronema lutheri - Common aquaculture strain)
+# ------------------------------------------------------------------
+wget "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/019/693/415/GCA_019693415.1_ASM1969341v1/GCA_019693415.1_ASM1969341v1_genomic.fna.gz"
+
+if [ -s "GCA_019693415.1_ASM1969341v1_genomic.fna.gz" ]
+then 
+    echo "Pavlova (Diacronema) genome successfully downloaded."
+else 
+    echo "ERROR: Pavlova genome did not download; check script."
+fi
+
+# ------------------------------------------------------------------
+# 3. TETRASELMIS (Tetraselmis chuii - Key bivalve hatchery feed)
+# ------------------------------------------------------------------
+wget "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/003/613/945/GCA_003613945.1_ASM361394v1/GCA_003613945.1_ASM361394v1_genomic.fna.gz"
+
+if [ -s "GCA_003613945.1_ASM361394v1_genomic.fna.gz" ]
+then 
+    echo "Tetraselmis genome successfully downloaded."
+else 
+    echo "ERROR: Tetraselmis genome did not download; check script."
+fi
+
+# ------------------------------------------------------------------
+# 4. THALASSIOSIRA (Thalassiosira pseudonana - Model diatom)
+# ------------------------------------------------------------------
+wget "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/149/405/GCF_000149405.2_ASM14940v2/GCF_000149405.2_ASM14940v2_genomic.fna.gz"
+
+if [ -s "GCF_000149405.2_ASM14940v2_genomic.fna.gz" ]
+then 
+    echo "Thalassiosira genome successfully downloaded."
+else 
+    echo "ERROR: Thalassiosira genome did not download; check script."
+fi
+
+echo "All download tasks evaluated."; date"
+```
+
+I ran this and it took like 1 second (two hours was way over kill, also I did not need to submit it as a job probably). The only one that did not download was the tetra genome. 
+
+  
+Here is a script that I will look at to do this:
+
+```
+#!/bin/bash
+#SBATCH --job-name=krakenuniq_array
+#SBATCH --output=logs/krakenuniq_%A_%a.out
+#SBATCH --error=logs/krakenuniq_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=12
+#SBATCH --mem=80G
+#SBATCH --time=04:00:00
+#SBATCH --array=1-70
+
+# Load required module
+module load krakenuniq/1.0.4
+
+# 2. Define your paths (UPDATE THE DB_PATH)
+DB_PATH="/path/to/vacc/krakenuniq/database" 
+OUTPUT_DIR="./krakenuniq_outputs"
+SAMPLE_LIST="sample_list.txt"
+
+mkdir -p $OUTPUT_DIR logs
+
+# 3. Pull the specific sample name for this Slurm task ID
+SAMPLE_NAME=$(sed -n "${SLURM_ARRAY_TASK_ID}p" $SAMPLE_LIST)
+
+echo "Starting KrakenUniq for sample: ${SAMPLE_NAME}"
+
+# 4. Run KrakenUniq for paired-end data
+krakenuniq --db $DB_PATH \
+           --threads 12 \
+           --paired \
+           --gzip-compressed \
+           --fastq-input \
+           --report-file ${OUTPUT_DIR}/${SAMPLE_NAME}.report.txt \
+           --output ${OUTPUT_DIR}/${SAMPLE_NAME}.output.txt \
+           ${SAMPLE_NAME}_R1.fastq.gz ${SAMPLE_NAME}_R2.fastq.gz
+
+echo "Finished processing ${SAMPLE_NAME}"
+```
+
+------
+
+
+------
+<div id='id-section48'/> 
+
+### Entry 48: 2026-07-21
+
+So, I was getting confused yesterday and making a script to index the algal reference genomes with bwa-mem2; however, I will be using fastq screen to look at algal contamination. This requires indexed samples using either bwa or bowtie2. I will check what is on the VACC and how to go from there. I wanted to use krakenuniq, however, there is only a database on the VACC that is for looking at microbes. It does not contain algal samples. On that note, I will check out kraken2 on the vacc potentially...
+
+```
+              Raw/Trimmed FASTQ Reads
+                         │
+        ┌────────────────┴────────────────┐
+        ▼                                 ▼
+  FastQ Screen                      KrakenUniq
+ (Bowtie2 Indices)              (VACC Kraken DB)
+ (in my case, bwa)                        |
+        │                                 │
+  Target: Diet Algae                Target: Bacteria,
+  & Host Genome                     Archaea, Viruses
+        │                                 │
+        └────────────────┬────────────────┘
+                         ▼
+                   MultiQC Report
+        (Combined view of Host %, Diet %, 
+           and Microbial Contamination)
+
+```
+
+I will use bwa because I am familiar with that syntax more than bowtie.
+
+
+#### 01.1_contamination_index.sh
+```
+#!/bin/bash
+#SBATCH --job-name=index_algae
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8G
+#SBATCH --time=10:00:00
+#SBATCH --output=/users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/logs/index_%j.out
+#SBATCH --error=/users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/logs/index_%j.err
+#SBATCH --mail-type=ALL
+
+# ------------------------------------------------------------------
+# Setup & Directories
+# ------------------------------------------------------------------
+mussel_dir="/users/e/d/edombro1/scratch/aus_mussels/data/reference"
+algae_dir="/users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes"
+log_dir="${algae_dir}/logs"
+
+# Ensure the logs directory exists before processing
+mkdir -p "${log_dir}"
+
+# Enable strict error handling
+set -e
+
+# ------------------------------------------------------------------
+# Symlink Mussel Genome into Algae Directory
+# ------------------------------------------------------------------
+mussel_fasta_name="GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna"
+original_mussel_path="${mussel_dir}/${mussel_fasta_name}"
+target_mussel_path="${algae_dir}/${mussel_fasta_name}"
+
+echo "Creating symlink for Mussel reference in ${algae_dir}..."
+ln -sf "${original_mussel_path}" "${target_mussel_path}"
+
+# Load bwa and dependency
+module load gcc/13.3.0-xp3epyt
+module load bwa/0.7.17-iqv3cxl
+
+echo "=== Starting BWA Indexing Pipeline: $(date) ==="
+
+# create specific function (run_bwa_index) to 1. unzip ref if neeeded; and 2. run command bwa index
+# Helper function for explicit indexing checks
+run_bwa_index() {
+    local ref_file="$1"
+    local species_label="$2"
+
+    echo "----------------------------------------------------"
+    echo "Processing ${species_label}..."
+
+    # Decompress if gzipped
+    if [[ "${ref_file}" == *.gz ]]; then
+        echo "Decompressing ${ref_file}..."
+        gunzip -k -f "${ref_file}"
+        ref_file="${ref_file%.gz}"
+    fi
+
+    # Verify uncompressed FASTA exists
+    if [[ ! -f "${ref_file}" ]]; then
+        echo "[ERROR] Reference file ${ref_file} not found!" >&2
+        exit 1
+    fi
+
+    # Execute indexing
+    echo "Running 'bwa index' on ${ref_file}..."
+    if bwa index "${ref_file}"; then
+        echo "[SUCCESS] Indexing complete for ${species_label}."
+    else
+        echo "[ERROR] BWA indexing failed for ${species_label}!" >&2
+        exit 1
+    fi
+}
+
+# ------------------------------------------------------------------
+# 1. MUSSEL REFERENCE
+# ------------------------------------------------------------------
+run_bwa_index "${mussel_dir}/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna" "Mytilus galloprovincialis"
+
+# ------------------------------------------------------------------
+# 2. ALGAL REFERENCES
+# ------------------------------------------------------------------
+# ISOCHRYSIS (Isochrysis galbana)
+run_bwa_index "${algae_dir}/GCA_018136815.1_ASM1813681v1_genomic.fna.gz" "Isochrysis galbana"
+
+# PAVLOVA (Diacronema lutheri)
+run_bwa_index "${algae_dir}/GCA_019693415.1_ASM1969341v1_genomic.fna.gz" "Diacronema lutheri"
+
+# TETRASELMIS (Tetraselmis chuii)
+run_bwa_index "${algae_dir}/GCA_026401115.1_UNIGE_Tchui_1.0_genomic.fna.gz" "Tetraselmis chuii"
+
+# THALASSIOSIRA (Thalassiosira pseudonana)
+run_bwa_index "${algae_dir}/GCF_000149405.2_ASM14940v2_genomic.fna.gz" "Thalassiosira pseudonana"
+
+echo "----------------------------------------------------"
+echo "=== All BWA indexing tasks completed successfully: $(date) ==="
+```
+
+okay; stupidly, I let the mussel files overwrite my original indexed mussel genome. So, when the script finishes with the mussel samples, I need to go back and do the following.
+1. move the new indexed files to the algae contamination folder
+2. re-run my original reference indexing pipeline (thankfully, that is literally just opening a tmux with srun and doing this: 'bwa-mem2 index GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna')
+
+...so all is not lost. It will be fixed soon! 
+
+Next, I generated files with 1Mb regions of my genome (1700 of them). I then updated my freebayes script to skip highly repetitive regions. I am running two test files. We shall see. Here's the code for generating the guide files: 
+
+```
+module load module load gcc/13.3.0-xp3epyt
+module load bedtools2/2.31.1-xip5kr5
+
+# Define index and output file paths
+REF_INDEX="/users/e/d/edombro1/scratch/aus_mussels/data/reference/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna.fai"
+OUTPUT_1MB_FILE="/users/e/d/edombro1/scratch/aus_mussels/data/reference/regions_1Mb.txt"
+
+# Make 1Mb windows (1-based format)
+bedtools makewindows -g "$REF_INDEX" -w 1000000 | awk '{print $1":"$2+1"-"$3}' > "$OUTPUT_1MB_FILE"
+
+# Count lines (this is your upper bound for the array)
+wc -l "$OUTPUT_1MB_FILE"
+```
+
+------
+
+------
+<div id='id-section49'/> 
+
+### Entry 48: 2026-07-22
+
+I launched the first 500 lines of my freebayes array. It is running...I tried to launch all 1700 files at once, but there is a limit on the VACC for 1000 files at a time. 
+
+Next, I messed around a bit with my algae contamination scripts. I have the following documents, but could not get them to launch. 
+
+```
+# ------------------------------------------------------------------
+# FastQ Screen Configuration for Diagnostic Algal QC
+# ------------------------------------------------------------------
+
+# Specify BWA as the aligner
+BOWTIE2 bwa
+
+# ------------------------------------------------------------------
+# Databases / References (Use full path without extension)
+# ------------------------------------------------------------------
+
+# Host Mussel Reference
+DATABASE Mussel /users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/GCF_965363235.1_xbMytGall1.hap1.1_genomic.fna
+
+# 1. Isochrysis galbana
+DATABASE Isochrysis /users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/GCA_018136815.1_ASM1813681v1_genomic.fna
+
+# 2. Diacronema lutheri
+DATABASE Diacronema /users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/GCA_019693415.1_ASM1969341v1_genomic.fna
+
+# 3. Tetraselmis chuii
+DATABASE Tetraselmis /users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/GCA_026401115.1_UNIGE_Tchui_1.0_genomic.fna
+
+# 4. Thalassiosira pseudonana
+DATABASE Thalassiosira /users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/GCF_000149405.2_ASM14940v2_genomic.fna
+```
+
+```
+#!/bin/bash
+#SBATCH --job-name=fastq_screen_algae
+#SBATCH --partition=general
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=12:00:00
+#SBATCH --output=/users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/logs/screen_%j.out
+#SBATCH --error=/users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes/logs/screen_%j.err
+#SBATCH --mail-type=ALL
+
+# Enable strict error handling
+set -e
+
+# ------------------------------------------------------------------
+# Directories
+# ------------------------------------------------------------------
+algae_dir="/users/e/d/edombro1/scratch/aus_mussels/data/reference/algae_genomes"
+conf_file="${algae_dir}/fastq_screen.conf"
+out_dir="${algae_dir}/fastq_screen_results"
+log_dir="${algae_dir}/logs"
+
+# Adjust this path to where your larval WGS FASTQ files live:
+fastq_dir="/users/e/d/edombro1/scratch/aus_mussels/data/trimmed_fq"
+
+mkdir -p "${out_dir}"
+mkdir -p "${log_dir}"
+
+# ------------------------------------------------------------------
+# Modules and fastq screen download
+# ------------------------------------------------------------------
+module load gcc/13.3.0-xp3epyt
+module load bwa/0.7.17-iqv3cxl
+# module load fastq-screen 
+fastq_screen_bin="${algae_dir}/FastQ-Screen-0.15.3/fastq_screen"
+
+echo "=== Starting FastQ Screen Run: $(date) ==="
+
+# ------------------------------------------------------------------
+# Run FastQ Screen
+# ------------------------------------------------------------------
+# Option A: Sample a representative subset (100k reads) for fast diagnostic QC
+"${fastq_screen_bin}" \
+    --conf "${conf_file}" \
+    --outdir "${out_dir}" \
+    --threads 8 \
+    --aligner bwa \
+    --subset 100000 \
+    "${fastq_dir}"/*.fastq.gz
+
+echo "=== FastQ Screen Completed: $(date) ==="
+```
+
+I had to download fastq-screen; it was not already on the VACC. Can't get this running though, will check back in tomorrow. 
+------
+
+------
+<div id='id-section50'/> 
+
+### Entry 48: 2026-07-23
+
+My array is still running; yay! I have the successful message from many of them that they finished...here is the command I used to check: `grep -w "completed successfully." variant_calling_freebayes.4687431_*` 
+I ran that in the logs folder; I need to do a version where the log *doesn't* have that to check what has not successfully ran.
+
+Additionally, I updated the fastq screen script. It was running into an issue yesterday because I loaded the module, then directly loaded the command. Since I downloaded this from the internet to a new file I needed to directly mention it using a variable...also, my fastq file path was wrong. It is up and running now! Yay! That is good news. Will check back in when things continue. Some other goals while these things run: 
+
+* variant filtering script
+* different files for screening snps
+* vcf concatination script
+
+just some thoughts for now...
 
 ------

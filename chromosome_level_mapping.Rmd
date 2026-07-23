@@ -1,0 +1,276 @@
+---
+title: "chromosome_level_mapping.Rmd"
+author: "Emily Dombrowski"
+date: "2026-07-07"
+output: html_document
+---
+This is a script for analyzing genome level trends in my mussel samples. I have adult and larval samples. To make the plots, I am using outputs from the package 'samtools' and heavily consulting (r graph gallery)[https://r-graph-gallery.com/]. I have described the data in more detail below and the processes of analyzing. 
+
+
+#### Load libraries and files
+I am going to be graphing with ggplot and use plotly to visualize sample level data.
+The file that I am loading contains coverage data per chromosome/scaffold for each of the samples. 
+```{r, echo=FALSE, include=FALSE}
+library(tidyverse)
+library(plotly)
+
+# samtools coverage data outputs
+cov_data <- read_delim("coverage_chrom.txt", delim = "\t")
+# picard mapping proportions outputs
+qc_data <- read_delim("mapping_proportions_summary.txt", delim = "\t")
+
+head(cov_data)
+```
+Some notes about each row: 
+* sample: sample name, in the format "Sample ID_temperature_day_elution"; some deviations from this
+* chromosome: chromosome name
+* start_pos: first place read on chromosome (always 1)
+* end_pos: total length of chromosome
+* numreads: total amount of reads that aligned to this chromosome
+* covbases: number of base pairs along chromosome that have at least one read per site
+* coverage: percentage of chromosome's length that was physicaly sequenced
+* meandepth: number of reads stacked vertically per chromosome
+* meanbaseq: mean base quality
+* meanmapq: mean map quality
+
+Next, I am going to do some manipulations to assign filters to each variable that separate them by temperature and life stage.
+Additionally, there are some names that don't follow the strict pattern, so I included code to manually reassign these samples. 
+
+#### manipulate data to add filters
+```{r}
+cov_filter <- cov_data %>%
+  mutate(timepoint = case_when(
+      # Looks for strings starting with F or M
+      str_detect(sample, "^[FM]")       ~ "adult",
+      
+      # Matches exact day tags within the sample ID
+      str_detect(sample, "-D1-")          ~ "day_1",
+      str_detect(sample, "-D10-")         ~ "day_10",
+      
+      # The | operator means "OR", catching both Day 19 and Day 20
+      str_detect(sample, "-D19-|-D20-")   ~ "final_day",
+      
+      # Catch-all safety net just in case a sample ID is misformatted
+      TRUE                                ~ "Unknown" 
+    ),
+    
+    # 2. Extract the Temperature component
+    temperature = case_when(
+      str_detect(sample, "-14C-") ~ "14C",
+      str_detect(sample, "-22C-") ~ "22C",
+      TRUE                        ~ "initial" # Adults and Day 1 baselines land here
+    )
+    
+  )
+  
+cov_filter <- cov_filter %>%
+  mutate(
+    temperature = case_when(
+      sample == "C3R3-D20-14-E1" ~ "14C",
+      sample == "B1R3-B2R1-22-D10-E1" ~ "22C",
+      TRUE ~ temperature
+                          )
+        )
+
+# head(cov_filter)
+
+qc_data <- qc_data %>%
+  mutate(
+    # The original 'Total_Reads' column actually represents the true mapped reads
+    True_Mapped = Total_Reads, 
+    True_Total  = Total_Reads + Unmapped_Reads,
+    
+    # Recalculate everything accurately
+    Proportion_Mapped = True_Mapped / True_Total,
+    Total_Reads       = True_Total,
+    Mapped_Reads      = True_Mapped
+  ) %>%
+  dplyr::select(-True_Mapped, -True_Total)
+```
+Now, the timepoint and temperature columns can be used for downstream filtering. Let's start calculating coverage, reads, etc. per sample and chromosome. 
+
+Some configuring from picard data outputs to join data frames: 
+
+```{r}
+# get rid of groups to make this join more straight forward
+metadata_df <- cov_filter %>%
+  group_by(sample, timepoint, temperature) %>%
+  summarize(.groups = "drop") 
+
+mapping_proportions <- metadata_df %>%
+  left_join(qc_data, by = c("sample" = "Sample"))
+
+head(mapping_proportions)
+
+```
+
+```{r}
+# convert temperature to a factor to have graph better sorted
+mapping_proportions$temperature <- factor(mapping_proportions$temperature, 
+                                          levels = c("initial", "14C", "22C"))
+
+# Barplot showing sample vs. proportion mapped
+p <- ggplot(mapping_proportions, aes(x = sample, y = Proportion_Mapped, fill = temperature)) + 
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_blank()) +
+  labs(y = "Mapped reads / total reads",
+       x = "Sample (hover over bar to see individuals)")
+p
+
+ggplotly(p)
+
+# Total reads per sample
+m <- ggplot(mapping_proportions, aes(x=sample, y=Mapped_Reads)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_blank()) +
+  labs(y = "Mapped reads",
+       x = "Sample")
+
+ggplotly(m)
+
+box <- ggplot(mapping_proportions, aes(x = timepoint, y = Proportion_Mapped, fill = temperature)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(aes(text = sample), position = position_jitterdodge(jitter.width = 0.1), size = 2) +
+  theme_minimal() +
+  labs(x = "Life stage", y = "Mapped reads/unmapped reads")
+
+ggplotly(box)
+
+print(box)
+```
+
+
+
+I think I want a plot with an x axis that is "chromosome," and a y axis that is "sample coverage." There will be 70 points per chromosome...I wonder if it will be informative to break it up by temperature.
+
+#### coverage accross the genome by temperature treatment
+```{r coverage accross the genome by treatment}
+
+cov_chrom <- ggplot(cov_filter, aes(x = chromosome, y = coverage, fill = temperature, color = temperature)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA, position = position_dodge(width = 1.0)) +
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.1, dodge.width = 0.8), 
+              size = 1.5, alpha = 0.5, aes(text = sample)) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank()) +
+  labs(x = "Chromosome", y = "Coverage")
+
+print(cov_chrom)
+
+ggplotly(cov_chrom)
+```
+
+
+
+Okay, so everything looks pretty high. I am happy with this! But, this graph is kind of annoying to look at, so let's do a more traditional plot. 
+x-axis: chromosome
+y axis: coverage
+Plot type: points
+
+#### coverage accross the genome
+```{r coverage accross the genome}
+
+cov_gen <- ggplot(cov_filter, aes(x = chromosome, y = coverage, fill = temperature)) +
+  geom_point() +
+  theme(axis.text.x = element_blank()) +
+  theme_minimal() +
+  labs(x = "Chromosome", y = "Coverage")
+
+print(cov_gen)
+
+ggplotly(cov_gen)
+
+```
+
+Okay, now coverage by sample. I think to do this, we need to add a new feature to our df that compresses the average coverage per sample/the coverage per sample. I might also try and plot depth on the same plot...could be cool to see the two together. I will have to make sure to not show the sample names because it will be quite a lot all at the same time. 
+
+#### coverage and depth by sample
+```{r}
+
+sample_qc <- cov_filter %>%
+  group_by(sample, timepoint, temperature) %>%
+  summarize(
+    # calculate sample coverage using the end position and coverage per sample
+    global_coverage = (sum(covbases)/sum(end_pos)) * 100,
+
+    glob_depth = sum(meandepth * end_pos) / sum(end_pos),
+    .groups = "drop"
+  )
+  
+# cov_samp <- ggplot(sample_qc, x = sample, y = global_coverage) +
+#  geom_point(fill = temperature) +
+#  theme(axis.text.x = element_blank())
+
+
+cov_samp <- ggplot(sample_qc, aes(x = sample, y = global_coverage, color = temperature)) +
+  geom_point(size = 3, alpha = 0.8) +
+  theme_minimal() +
+  labs(
+    x = "Sample",
+    y = "Coverage (%)",
+    color = "Temperature"
+  ) +
+  theme(
+    axis.text.x = element_blank(), 
+    panel.grid.minor = element_blank()
+  )
+
+print(cov_samp)
+
+cov_box <- ggplot(sample_qc, aes(x = timepoint, y = global_coverage, fill = temperature)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(aes(text = sample), position = position_jitterdodge(jitter.width = 0.1), size = 2) +
+  theme_minimal() +
+  labs(x = "Life stage", y = "Coverage")
+
+print(cov_box)
+
+ggplotly(cov_box)
+
+#### global genome depth by sample
+
+depth <- ggplot(sample_qc, aes(x = sample, y = glob_depth, color = temperature)) +
+  geom_point(size = 3, alpha = 0.8) +
+  theme_minimal() +
+  labs(
+    x = "Samples",
+    y = "Depth",
+    color = "Temperature") +
+  theme(axis.text.x = element_blank())
+
+print(depth)
+
+#### average sample depth accross the whole genome
+
+depth_box <- ggplot(sample_qc, aes(x = timepoint, y = glob_depth, fill = temperature)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(aes(text = sample), position = position_jitterdodge(jitter.width = 0.1), size = 2) +
+  theme_minimal() +
+  labs(x = "Life stage", y = "Depth")
+
+print(depth_box)
+
+ggplotly(depth_box)
+
+
+```
+
+Upon looking at the really, really low samples for coverage and depth on the final day, it looks like the first spawning blocks had the lowest; this makes sense because they had the lowest pooled sample sizes. Therefore, algae contamination would be strongest with the lowest pool size...
+
+#### sample coverage vs. depth
+* cov on y axis
+* depth on x axis
+* sort in ascending order
+* color by temperature treatment
+* lines for QC
+
+```{r sample coverage vs. depth}
+cov_depth <- ggplot(sample_qc, aes(x = global_coverage, y = glob_depth, fill = temperature, color = temperature, text = sample)) +
+  geom_point() +
+  labs(x = "Average sample depth", y = "Average sample coverage")
+  
+
+print(cov_depth)
+ggplotly(cov_depth)
+
+
+```

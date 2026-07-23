@@ -6,10 +6,14 @@ output: html_document
 ---
 
 This is a script for parsing mapping stats in mussel WGS samples. The purpose of this script is to take quality control stats from the mapping process of fastq files to .sam (or in my case .cram) files and deduplication using Picard.
-Input documents: `mapping_proportions_summary.txt`, 
+
+Part of this script crashed; so I will start a new one with the newer obtained data.
+Input documents: `mapping_proportions_summary.txt` 
 Output figures: 
 * Coverage / sample (interactive plotly)
 * 
+
+#### Load libraries and documents
 ```{r}
 
 # Load libraries
@@ -18,8 +22,10 @@ library(plotly)
 
 # 1. Load the mapping data (tab-separated)
 qc_data <- read_delim("mapping_proportions_summary.txt", delim = "\t")
+```
 
-# Fix the upstream Picard math bug inline
+The names in this document are confusing, so here are some adjustments that take into account the math. For example, since there are pretty low mapping rates, the script had a step that subtracted unmapped reads from mapped reads; some of these were coming out negative, and had to be deleted. 
+```{r}
 qc_data <- qc_data %>%
   mutate(
     # The original 'Total_Reads' column actually represents the true mapped reads
@@ -77,17 +83,15 @@ print(low_depth_samples)
 # Plot A: Distribution of Mapping Proportions
 ggplot(qc_data, aes(x = Proportion_Mapped)) +
   geom_histogram(binwidth = 0.01, fill = "steelblue", color = "black", alpha = 0.8) +
-  geom_vline(xintercept = mapping_threshold, color = "red", linetype = "dashed", size = 1) +
   theme_minimal() +
   labs(
     title = "Mytilus Pool Mapping Success",
-    subtitle = paste("Red line denotes custom threshold at", mapping_threshold * 100, "%"),
     x = "Proportion of Reads Mapped",
     y = "Number of Samples"
   )
 
 # Plot B: Total Depth vs. Mapping Success
-ggplot(qc_data, aes(x = Total_Reads / 1e6, y = Proportion_Mapped)) +
+q <- ggplot(qc_data, aes(x = Total_Reads / 1e6, y = Proportion_Mapped)) +
   geom_point(color = "darkgreen", size = 3, alpha = 0.7) +
   theme_minimal() +
   labs(
@@ -95,6 +99,9 @@ ggplot(qc_data, aes(x = Total_Reads / 1e6, y = Proportion_Mapped)) +
     x = "Total Reads (Millions)",
     y = "Proportion Mapped"
   )
+
+ggplotly(q)
+
 ```
 
 

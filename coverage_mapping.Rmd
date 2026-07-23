@@ -1,0 +1,126 @@
+---
+title: "coverage_and_mapping.Rmd"
+author: "Emily Dombrowski"
+date: "2026-07-16"
+output: html_document
+---
+
+This is a R markdown file where I will be looking at mapping stats and coverage for Whole Genome Sequenced *Mytilus* mussel data. 
+
+I have previously visualized mapping and coverage, but I had to come back because I applied some more stringent filtering to my samples. So, here are my next few analyses. 
+
+### Load libraries and import data
+
+```{r}
+
+library(tidyverse)
+library(plotly)
+
+# samtools coverage data outputs
+cov_data <- read_csv("master_qc_and_coverage.csv")
+
+head(cov_data)
+```
+
+The data is set up with the following structure: 
+* sample: sample name
+  * either larval samples with spawning block, replicate-temperature-date-elution
+  *or, adule mussel: sex, number, elution
+* chromosome scaffold name
+* start position of reads
+* end position of reads
+* total number of reads
+* covbases: number of base pairs along chromosome that have at least one read per site
+* breadth of coverage:
+* depth:
+* meamapq: mean map quality
+* percentage_gc
+
+Next, I am going to do some manipulations to assign filters to each variable that separate them by temperature and life stage.
+Additionally, there are some names that don't follow the strict pattern, so I included code to manually reassign these samples. 
+
+#### manipulate data to add filters
+```{r}
+cov_filter <- cov_data %>%
+  mutate(timepoint = case_when(
+      # Looks for strings starting with F or M
+      str_detect(sample, "^[FM]")       ~ "adult",
+      
+      # Matches exact day tags within the sample ID
+      str_detect(sample, "-D1-")          ~ "day_1",
+      str_detect(sample, "-D10-")         ~ "day_10",
+      
+      # The | operator means "OR", catching both Day 19 and Day 20
+      str_detect(sample, "-D19-|-D20-")   ~ "final_day",
+      
+      # Catch-all safety net just in case a sample ID is misformatted
+      TRUE                                ~ "Unknown" 
+    ),
+    
+    # 2. Extract the Temperature component
+    temperature = case_when(
+      str_detect(sample, "-14C-") ~ "14C",
+      str_detect(sample, "-22C-") ~ "22C",
+      TRUE                        ~ "initial" # Adults and Day 1 baselines land here
+    )
+    
+  )
+  
+cov_filter <- cov_filter %>%
+  mutate(
+    temperature = case_when(
+      sample == "C3R3-D20-14-E1" ~ "14C",
+      sample == "B1R3-B2R1-22-D10-E1" ~ "22C",
+      TRUE ~ temperature
+                          )
+  )
+```
+
+#### organization: total mapped reads per chromosome
+```{r}
+# Extract total mapped reads per sample from the "all" row
+total_mapped_df <- cov_filter %>%
+  filter(chromosome == "all") %>%
+  select(sample, total_mapped_reads = numreads)
+
+# Join it back to calculate proportions for individual chromosomes
+cov_filter <- cov_filter %>%
+  left_join(total_mapped_df, by = "sample") %>%
+  mutate(
+    # What proportion of the sample's total mapped reads landed on this chromosome?
+    prop_reads_on_chrom = numreads / total_mapped_reads
+  )
+```
+
+#### summary stats
+```{r}
+
+# Generate a summary table of overall depth and breadth
+coverage_summary_table <- cov_filter %>%
+  filter(chromosome == "all") %>%
+  group_by(timepoint, temperature) %>%
+  summarise(
+    sample_count = n(),
+    mean_depth = mean(depth),
+    sd_depth = sd(depth),
+    min_depth = min(depth),
+    max_depth = max(depth),
+    mean_breadth_pct = mean(breadth_of_coverage),
+    .groups = "drop"
+  )
+
+```
+
+```{r}
+# Barplot showing sample vs. proportion mapped
+p <- ggplot(, aes(x = sample, y = Proportion_Mapped, fill = temperature)) + 
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_blank()) +
+  labs(y = "Mapped reads / total reads",
+       x = "Sample (hover over bar to see individuals)")
+p
+
+ggplotly(p)
+
+```
+
